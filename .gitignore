@@ -3,6 +3,12 @@ material/
 成品/
 material
 成品
+*.zip
+
+# ---- 环境变量与密钥敏感文件 ----
+.env
+.env.*
+*.env
 
 # ---- Python ----
 __pycache__/
@@ -28,10 +34,16 @@ ENV/
 .coverage
 htmlcov/
 
-# ---- 插件运行时数据 ----
+# ---- 插件运行时数据与本地数据库 ----
 data/
 *.log
 logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- 前端依赖（若存在本地构建）----
+node_modules/
 
 # ---- 编辑器 / 系统 ----
 .vscode/
