@@ -5,6 +5,12 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, List
 
 try:
+    from astrbot.api import logger as astrbot_logger
+except Exception:
+    import logging as _logging
+    astrbot_logger = _logging.getLogger("astrbot.plugin.astrbot_plugin_personated")
+
+try:
     from ...utils.time_utils import get_today_str, get_weekday_cn, parse_time_str
 except (ImportError, ValueError):
     from utils.time_utils import get_today_str, get_weekday_cn, parse_time_str
@@ -41,29 +47,32 @@ class ScheduleWebApi:
             self.logger.warning("Context does not support register_web_api. Web API skipped.")
             return
 
-        routes = [
-            (f"/{PLUGIN_NAME}/schedule/config", self.get_config, ["GET"], "获取日程配置与可用模型"),
-            (f"/{PLUGIN_NAME}/schedule/config/save", self.save_config, ["POST"], "保存日程配置"),
-            (f"/{PLUGIN_NAME}/schedule/today", self.get_today, ["GET"], "获取今日日程及当前生效状态"),
-            (f"/{PLUGIN_NAME}/schedule/generate", self.generate_today, ["POST"], "立即触发重新生成今日日程"),
-            (f"/{PLUGIN_NAME}/schedule/item/update", self.update_item, ["POST"], "实时编辑今日某个时段的活动与状态"),
-            (f"/{PLUGIN_NAME}/schedule/dates", self.get_dates, ["GET"], "获取所有已保存日程的日期列表"),
-            (f"/{PLUGIN_NAME}/schedule/detail", self.get_schedule_detail, ["GET"], "获取指定日期的日程详情"),
-            (f"/{PLUGIN_NAME}/schedule/save-full", self.save_full_schedule, ["POST"], "保存或更新整日日程安排"),
-            (f"/{PLUGIN_NAME}/schedule/generate-date", self.generate_for_date, ["POST"], "为指定日期生成日程"),
-            (f"/{PLUGIN_NAME}/schedule/delete-date", self.delete_for_date, ["POST"], "删除指定日期的日程"),
+        base_routes = [
+            ("schedule/config", self.get_config, ["GET"], "获取日程配置与可用模型"),
+            ("schedule/config/save", self.save_config, ["POST"], "保存日程配置"),
+            ("schedule/today", self.get_today, ["GET"], "获取今日日程及当前生效状态"),
+            ("schedule/generate", self.generate_today, ["POST"], "立即触发重新生成今日日程"),
+            ("schedule/item/update", self.update_item, ["POST"], "实时编辑今日某个时段的活动与状态"),
+            ("schedule/dates", self.get_dates, ["GET"], "获取所有已保存日程的日期列表"),
+            ("schedule/detail", self.get_schedule_detail, ["GET"], "获取指定日期的日程详情"),
+            ("schedule/save-full", self.save_full_schedule, ["POST"], "保存或更新整日日程安排"),
+            ("schedule/generate-date", self.generate_for_date, ["POST"], "为指定日期生成日程"),
+            ("schedule/delete-date", self.delete_for_date, ["POST"], "删除指定日期的日程"),
         ]
 
-        for route, handler, methods, desc in routes:
-            try:
-                context.register_web_api(route, handler, methods, desc)
-                self.logger.debug("Registered Web API: %s %s", methods, route)
-            except Exception as e:
-                self.logger.warning("Failed to register Web API route %s: %s", route, e)
+        # Register both with /{PLUGIN_NAME}/ prefix and short / prefix for bulletproof routing
+        for path_part, handler, methods, desc in base_routes:
+            for prefix in [f"/{PLUGIN_NAME}/", "/"]:
+                full_route = f"{prefix}{path_part}"
+                try:
+                    context.register_web_api(full_route, handler, methods, desc)
+                except Exception as e:
+                    self.logger.warning("Failed to register Web API route %s: %s", full_route, e)
+        astrbot_logger.info(f"[拟人化日程] 成功注册 {len(base_routes)} 组 Web API 路由")
 
     async def get_config(self) -> Any:
         """GET /{PLUGIN_NAME}/schedule/config"""
-        # Retrieve available chat providers in AstrBot
+        astrbot_logger.info("[拟人化日程] WebUI 控制台请求作息规则与分段配置")
         available_providers: List[Dict[str, str]] = []
         try:
             pm = getattr(self.mgr.context, "provider_manager", None)
@@ -90,6 +99,7 @@ class ScheduleWebApi:
 
     async def save_config(self) -> Any:
         """POST /{PLUGIN_NAME}/schedule/config/save"""
+        astrbot_logger.info("[拟人化日程] WebUI 控制台发起保存作息规则配置")
         if request is None:
             return error_response("Request context unavailable", 500)
 
@@ -156,7 +166,7 @@ class ScheduleWebApi:
         if hasattr(cfg, "save_config"):
             try:
                 cfg.save_config()
-                self.logger.info("Saved plugin configurations to persistent storage.")
+                astrbot_logger.info("[拟人化日程] 插件作息规则配置已成功持久化保存到磁盘")
             except Exception as e:
                 self.logger.error("Failed to invoke save_config(): %s", e)
 
@@ -164,13 +174,18 @@ class ScheduleWebApi:
 
     async def get_today(self) -> Any:
         """GET /{PLUGIN_NAME}/schedule/today"""
+        astrbot_logger.info("[拟人化日程] WebUI 控制台请求获取今日作息及生效状态")
         status = self.mgr.get_status_info()
         return json_response(status)
 
     async def generate_today(self) -> Any:
         """POST /{PLUGIN_NAME}/schedule/generate"""
+        astrbot_logger.info("[拟人化日程] WebUI 控制台触发重新生成今日作息...")
         try:
             schedule = await self.mgr.generate_today_schedule(force=True)
+            astrbot_logger.info(
+                f"[拟人化日程] 今日作息生成成功，共 {len(schedule.items)} 个时段，使用模型: {schedule.provider_used}"
+            )
             return json_response(
                 {
                     "success": True,
@@ -179,7 +194,7 @@ class ScheduleWebApi:
                 }
             )
         except Exception as e:
-            self.logger.error("API error generating schedule: %s", e, exc_info=True)
+            astrbot_logger.error(f"[拟人化日程] 生成日程异常: {e}")
             return error_response(f"生成日程失败: {e}", 500)
 
     async def update_item(self) -> Any:
@@ -191,6 +206,8 @@ class ScheduleWebApi:
         item_id = str(payload.get("id", "")).strip()
         activity = str(payload.get("activity", "")).strip()
         state = str(payload.get("state", "")).strip()
+
+        astrbot_logger.info(f"[拟人化日程] WebUI 控制台更新时段 [{item_id}] 状态")
 
         if not item_id:
             return error_response("缺少时段 ID (id)", 400)
@@ -216,6 +233,7 @@ class ScheduleWebApi:
         # Persist updated schedule
         self.mgr._schedules_history[schedule.date] = schedule.to_dict()
         self.mgr._save_to_storage()
+        astrbot_logger.info(f"[拟人化日程] 时段 [{item_id}] 已保存: 活动='{activity}', 心情='{state}'")
 
         return json_response(
             {
@@ -227,6 +245,7 @@ class ScheduleWebApi:
 
     async def get_dates(self) -> Any:
         """GET /{PLUGIN_NAME}/schedule/dates"""
+        astrbot_logger.info("[拟人化日程] WebUI 控制台查询已存档历史日期列表")
         dates = self.mgr.get_available_dates()
         return json_response({"dates": dates})
 
@@ -238,6 +257,7 @@ class ScheduleWebApi:
         if not date_str:
             date_str = get_today_str()
 
+        astrbot_logger.info(f"[拟人化日程] WebUI 控制台查询日期 [{date_str}] 的作息详情")
         schedule = self.mgr.get_schedule_by_date(date_str)
         if schedule is None and date_str == get_today_str() and self.mgr._current_schedule:
             schedule = self.mgr._current_schedule
@@ -271,6 +291,8 @@ class ScheduleWebApi:
         date_str = str(payload.get("date", "")).strip()
         if not date_str:
             date_str = get_today_str()
+
+        astrbot_logger.info(f"[拟人化日程] WebUI 控制台保存日期 [{date_str}] 的全天作息安排")
 
         # Validate date format
         try:
@@ -326,6 +348,7 @@ class ScheduleWebApi:
         )
 
         self.mgr.save_schedule_for_date(daily_schedule)
+        astrbot_logger.info(f"[拟人化日程] 成功保存 {date_str} 的日程数据，共 {len(schedule_items)} 个时段")
         return json_response(
             {
                 "saved": True,
@@ -341,9 +364,11 @@ class ScheduleWebApi:
 
         payload = await request.json(default={})
         date_str = str(payload.get("date") or get_today_str()).strip()
+        astrbot_logger.info(f"[拟人化日程] WebUI 控制台触发为日期 [{date_str}] 生成日程...")
 
         try:
             schedule = await self.mgr.generate_schedule_for_date(date_str, force=True)
+            astrbot_logger.info(f"[拟人化日程] 已成功为 {date_str} 生成 {len(schedule.items)} 个时段作息！")
             return json_response(
                 {
                     "success": True,
@@ -352,7 +377,7 @@ class ScheduleWebApi:
                 }
             )
         except Exception as e:
-            self.logger.error("Error generating schedule for %s: %s", date_str, e, exc_info=True)
+            astrbot_logger.error(f"[拟人化日程] 为日期 {date_str} 生成日程失败: {e}")
             return error_response(f"生成日程失败: {e}", 500)
 
     async def delete_for_date(self) -> Any:
@@ -368,7 +393,10 @@ class ScheduleWebApi:
         if not date_str:
             return error_response("未指定要删除的日期", 400)
 
+        astrbot_logger.info(f"[拟人化日程] WebUI 控制台请求删除日期 [{date_str}] 的作息存档")
         deleted = self.mgr.delete_schedule_for_date(date_str)
+        if deleted:
+            astrbot_logger.info(f"[拟人化日程] 成功删除日期 [{date_str}] 的日程记录")
         return json_response(
             {
                 "deleted": deleted,

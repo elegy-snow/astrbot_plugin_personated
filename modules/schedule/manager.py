@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 try:
+    from astrbot.api import logger as astrbot_logger
+except Exception:
+    import logging as _logging
+    astrbot_logger = _logging.getLogger("astrbot.plugin.astrbot_plugin_personated")
+
+LOG_TAG = "[拟人化日程]"
+
+try:
     from astrbot.core.agent.message import TextPart
 except Exception:
     class TextPart:  # type: ignore
@@ -204,23 +212,19 @@ class ScheduleManager(BaseFeatureModule):
                 self._current_schedule = DailySchedule.from_dict(
                     self._schedules_history[today_str]
                 )
-                self.logger.info(
-                    "Loaded today's existing schedule for date %s (%d items)",
-                    today_str,
-                    len(self._current_schedule.items),
+                astrbot_logger.info(
+                    f"{LOG_TAG} 成功加载今日（{today_str}）已存日程，共 {len(self._current_schedule.items)} 个时段"
                 )
             except Exception as e:
-                self.logger.warning("Failed to restore today's schedule from cache: %s", e)
+                astrbot_logger.warning(f"{LOG_TAG} 从缓存恢复今日日程失败: {e}")
 
         # Start background timer task
         self._scheduler_task = asyncio.create_task(
             self._scheduler_loop(),
             name="personated_schedule_timer",
         )
-        self.logger.info(
-            "ScheduleManager initialized. Daily generation time: %s, segments: %d",
-            self.daily_generate_time,
-            len(self.schedule_segments),
+        astrbot_logger.info(
+            f"{LOG_TAG} 日程后台调度器已启动。每日自动生成时刻: {self.daily_generate_time}，划分时段数: {len(self.schedule_segments)}"
         )
 
     async def terminate(self) -> None:
@@ -231,7 +235,7 @@ class ScheduleManager(BaseFeatureModule):
                 await self._scheduler_task
             except asyncio.CancelledError:
                 pass
-        self.logger.info("ScheduleManager terminated.")
+        astrbot_logger.info(f"{LOG_TAG} 日程管理器后台任务已停止。")
 
     # --------------------------------------------------------------------------
     # Background Scheduler Loop
@@ -250,34 +254,25 @@ class ScheduleManager(BaseFeatureModule):
             gen_minutes = time_to_minutes(gen_time)
 
             if today_str not in self._schedules_history and now_minutes >= gen_minutes:
-                self.logger.info(
-                    "Today's schedule missing for %s (current time %s >= %s). Generating now...",
-                    today_str,
-                    get_current_time_str(now),
-                    self.daily_generate_time,
+                astrbot_logger.info(
+                    f"{LOG_TAG} 启动检查: 今日（{today_str}）尚未生成日程且已过生成时刻 {self.daily_generate_time}，立即触发生成..."
                 )
                 await self.generate_today_schedule(force=False)
         except asyncio.CancelledError:
             return
         except Exception as e:
-            self.logger.error("Error during startup schedule check: %s", e, exc_info=True)
+            astrbot_logger.error(f"{LOG_TAG} 启动检查异常: {e}", exc_info=True)
 
         while True:
             try:
                 wait_seconds = seconds_until_next_run(self.daily_generate_time)
-                self.logger.info(
-                    "Next daily schedule generation in %.1f hours (%.0f seconds at %s)",
-                    wait_seconds / 3600.0,
-                    wait_seconds,
-                    self.daily_generate_time,
+                astrbot_logger.info(
+                    f"{LOG_TAG} 计划任务休眠中：距离下次日程自动生成（{self.daily_generate_time}）还有约 {wait_seconds / 3600.0:.1f} 小时 ({int(wait_seconds)} 秒)"
                 )
                 await asyncio.sleep(wait_seconds)
 
                 # Time reached, generate today's schedule
-                self.logger.info(
-                    "Daily schedule generation trigger reached at %s. Generating...",
-                    self.daily_generate_time,
-                )
+                astrbot_logger.info(f"{LOG_TAG} 触发定时任务：到达每日时刻 {self.daily_generate_time}，正在生成今日作息...")
                 await self.generate_today_schedule(force=True)
 
                 # Sleep 60 seconds to ensure we do not re-trigger within the same minute
@@ -286,7 +281,7 @@ class ScheduleManager(BaseFeatureModule):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error("Unexpected error in schedule loop: %s. Retrying in 60s...", e)
+                astrbot_logger.error(f"{LOG_TAG} 调度循环出现异常: {e}，60秒后自动重试", exc_info=True)
                 await asyncio.sleep(60.0)
 
     # --------------------------------------------------------------------------
@@ -419,7 +414,7 @@ class ScheduleManager(BaseFeatureModule):
             provider_id = await self.resolve_provider_id(umo)
 
             if not provider_id:
-                self.logger.error("No valid LLM provider available to generate daily schedule.")
+                astrbot_logger.warning(f"{LOG_TAG} 未检测到可用的 LLM 模型提供者，使用保底模板生成日程")
                 fallback = self._create_fallback_schedule(
                     date_str, weekday_str, persona_id, segments
                 )
@@ -435,11 +430,8 @@ class ScheduleManager(BaseFeatureModule):
                 template=self.custom_prompt_template,
             )
 
-            self.logger.info(
-                "Requesting LLM (%s) to generate schedule for %s (persona: %s)...",
-                provider_id,
-                date_str,
-                persona_id,
+            astrbot_logger.info(
+                f"{LOG_TAG} 正在请求大模型 [{provider_id}] 为今日（{date_str}）生成拟人化日程（当前人设: {persona_id}）..."
             )
 
             try:
@@ -463,15 +455,13 @@ class ScheduleManager(BaseFeatureModule):
                 self._schedules_history[date_str] = schedule.to_dict()
                 self._save_to_storage()
 
-                self.logger.info(
-                    "Successfully generated and stored %d schedule items for %s",
-                    len(schedule.items),
-                    date_str,
+                astrbot_logger.info(
+                    f"{LOG_TAG} 今日（{date_str}）日程已成功生成并持久化！共 {len(schedule.items)} 个时段，模型: {provider_id}"
                 )
                 return schedule
 
             except Exception as e:
-                self.logger.error("Failed to generate schedule via LLM: %s. Using sensible fallback.", e)
+                astrbot_logger.error(f"{LOG_TAG} 大模型生成今日日程异常: {e}，启用拟人化默认保底作息模板", exc_info=True)
                 fallback = self._create_fallback_schedule(
                     date_str, weekday_str, persona_id, segments
                 )
@@ -574,11 +564,8 @@ class ScheduleManager(BaseFeatureModule):
             # Append to system_prompt
             req.system_prompt = (req.system_prompt or "") + "\n\n" + injected_text
 
-        self.logger.debug(
-            "Injected schedule context for segment [%s] (%s ~ %s) into conversation",
-            active_item.name,
-            active_item.start,
-            active_item.end,
+        astrbot_logger.info(
+            f"{LOG_TAG} 对话时段匹配成功，已注入拟人化状态 -> 【{active_item.name}】活动: {active_item.activity} | 心情: {active_item.state} (模式: {self.inject_mode})"
         )
 
     # --------------------------------------------------------------------------
@@ -633,7 +620,7 @@ class ScheduleManager(BaseFeatureModule):
             try:
                 return DailySchedule.from_dict(self._schedules_history[date_str])
             except Exception as e:
-                self.logger.warning("Failed to parse schedule for date %s: %s", date_str, e)
+                astrbot_logger.warning(f"{LOG_TAG} 解析日期 {date_str} 的日程存档失败: {e}")
         return None
 
     def save_schedule_for_date(self, schedule: DailySchedule) -> None:
@@ -642,7 +629,7 @@ class ScheduleManager(BaseFeatureModule):
         if schedule.date == get_today_str():
             self._current_schedule = schedule
         self._save_to_storage()
-        self.logger.info("Saved schedule for date %s with %d items.", schedule.date, len(schedule.items))
+        astrbot_logger.info(f"{LOG_TAG} 日程数据持久化保存成功 (日期: {schedule.date}, 时段数: {len(schedule.items)})")
 
     def delete_schedule_for_date(self, date_str: str) -> bool:
         """Delete a saved schedule for a specific date."""
@@ -651,7 +638,7 @@ class ScheduleManager(BaseFeatureModule):
             if self._current_schedule and self._current_schedule.date == date_str:
                 self._current_schedule = None
             self._save_to_storage()
-            self.logger.info("Deleted schedule for date %s.", date_str)
+            astrbot_logger.info(f"{LOG_TAG} 已删除日期 {date_str} 的日程存档")
             return True
         return False
 
@@ -667,4 +654,5 @@ class ScheduleManager(BaseFeatureModule):
         except ValueError:
             target_dt = datetime.datetime.now()
 
+        astrbot_logger.info(f"{LOG_TAG} 开始为指定日期（{date_str}）生成拟人化日程...")
         return await self.generate_today_schedule(force=force, dt=target_dt, umo=umo)

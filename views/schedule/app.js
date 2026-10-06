@@ -18,7 +18,10 @@ async function getBridge() {
   }
   if (typeof _bridge.ready === "function") {
     try {
-      await _bridge.ready();
+      await Promise.race([
+        _bridge.ready(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("bridge.ready timeout")), 1500)),
+      ]);
     } catch (e) {
       console.warn("[Bridge] ready() warning:", e);
     }
@@ -54,11 +57,21 @@ const state = {
 // ============================================================================
 // API Helper
 // ============================================================================
+function unwrapApiResponse(resp) {
+  if (resp && typeof resp === "object") {
+    if (resp.data !== undefined && (resp.status === "ok" || resp.status === undefined)) {
+      return resp.data;
+    }
+  }
+  return resp;
+}
+
 async function apiGet(endpoint, params = {}) {
   const b = await getBridge();
   if (b && typeof b.apiGet === "function") {
     try {
-      return await b.apiGet(endpoint, params);
+      const resp = await b.apiGet(endpoint, params);
+      return unwrapApiResponse(resp);
     } catch (e) {
       console.error(`Bridge apiGet failed for ${endpoint}:`, e);
       throw e;
@@ -73,16 +86,14 @@ async function apiPost(endpoint, body = {}) {
   const b = await getBridge();
   if (b && typeof b.apiPost === "function") {
     try {
-      return await b.apiPost(endpoint, body);
+      const resp = await b.apiPost(endpoint, body);
+      return unwrapApiResponse(resp);
     } catch (e) {
       console.error(`Bridge apiPost failed for ${endpoint}:`, e);
       throw e;
     }
   }
   // Local development / browser preview fallback
-  console.warn(`[MockBridge] POST ${endpoint}`, body);
-  return { status: "ok" };
-}
   console.warn(`[MockBridge] POST ${endpoint}`, body);
   return { status: "ok" };
 }
@@ -192,7 +203,11 @@ async function loadTodayLive() {
   try {
     const res = await apiGet("schedule/today");
     if (!res) {
-      timelineEl.innerHTML = '<div class="loading-box">无法连接到插件服务</div>';
+      timelineEl.innerHTML = '<div class="loading-box">无法连接到插件服务，请确保插件正常运行</div>';
+      const actEl = document.getElementById("live-activity-text");
+      if (actEl) actEl.textContent = "无法获取今日状态，请点击右上角刷新";
+      const stateEl = document.getElementById("live-state-text");
+      if (stateEl) stateEl.textContent = "未连接";
       return;
     }
 
@@ -275,6 +290,10 @@ async function loadTodayLive() {
   } catch (err) {
     console.error("loadTodayLive failed:", err);
     timelineEl.innerHTML = `<div class="loading-box" style="color:var(--danger)">加载今日日程出错：${escapeHtml(err.message || String(err))}</div>`;
+    const actEl = document.getElementById("live-activity-text");
+    if (actEl) actEl.textContent = "同步失败：" + (err.message || String(err));
+    const stateEl = document.getElementById("live-state-text");
+    if (stateEl) stateEl.textContent = "异常";
   }
 }
 
