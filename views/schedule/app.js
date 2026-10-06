@@ -833,6 +833,8 @@ function bindDomEvents() {
         loadEditorSchedule(state.selectedDate);
       } else if (state.activeView === "view-rules") {
         loadRulesConfig();
+      } else if (state.activeView === "view-umo-injector") {
+        loadUmoConfigAndRules();
       }
     });
   }
@@ -1165,8 +1167,8 @@ function renderUmoRules() {
           ${searchKeyword || chatTypeFilter !== "all" || statusFilter !== "all" ? "未找到符合当前过滤条件的规则，请尝试调整筛选条件。" : "您可以点击「从 AstrBot 对话抓取」直接挑选已产生对话的群聊或私聊一键配置，也可以手动点击「添加专属规则」。"}
         </p>
         <div style="display: flex; gap: 10px; justify-content: center;">
-          <button class="btn btn-secondary" onclick="openDiscoverModal()">🔍 从 AstrBot 对话抓取</button>
-          <button class="btn btn-primary" onclick="openUmoRuleModal('')">➕ 手动添加规则</button>
+          <button class="btn btn-secondary btn-discover-trigger" onclick="openDiscoverModal()">🔍 从 AstrBot 对话抓取</button>
+          <button class="btn btn-primary btn-add-trigger" onclick="openUmoRuleModal('')">➕ 手动添加规则</button>
         </div>
       </div>
     `;
@@ -1201,18 +1203,18 @@ function renderUmoRules() {
             </div>
             <div class="rule-actions-group">
               <label class="toggle-control" title="启用/禁用此规则">
-                <input type="checkbox" ${toggleChecked} onchange="toggleUmoRule('${escapeHtml(rule.umo)}', this.checked)" />
+                <input type="checkbox" class="rule-toggle-checkbox" data-umo="${escapeHtml(rule.umo)}" ${toggleChecked} onchange="toggleUmoRule('${escapeHtml(rule.umo)}', this.checked)" />
                 <span class="toggle-track"></span>
               </label>
-              <button class="btn btn-secondary btn-sm" onclick="openUmoRuleModal('${escapeHtml(rule.umo)}')">✏️ 编辑</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteUmoRule('${escapeHtml(rule.umo)}')">🗑️ 删除</button>
+              <button class="btn btn-secondary btn-sm btn-edit-rule" data-umo="${escapeHtml(rule.umo)}" onclick="openUmoRuleModal('${escapeHtml(rule.umo)}')">✏️ 编辑</button>
+              <button class="btn btn-danger btn-sm btn-delete-rule" data-umo="${escapeHtml(rule.umo)}" onclick="deleteUmoRule('${escapeHtml(rule.umo)}')">🗑️ 删除</button>
             </div>
           </div>
 
           <div class="rule-umo-row">
             <span>🏷️ UMO:</span>
             <code class="rule-umo-code">${escapeHtml(rule.umo)}</code>
-            <button class="btn-copy-umo" onclick="copyToClipboard('${escapeHtml(rule.umo)}')" title="复制 UMO 字符串">📋 复制</button>
+            <button class="btn-copy-umo" data-umo="${escapeHtml(rule.umo)}" onclick="copyToClipboard('${escapeHtml(rule.umo)}')" title="复制 UMO 字符串">📋 复制</button>
           </div>
 
           <div class="rule-prompt-box">${promptSnippet}</div>
@@ -1234,6 +1236,7 @@ function renderUmoRules() {
 async function openDiscoverModal() {
   const modal = document.getElementById("modal-discover-umos");
   if (!modal) return;
+  modal.classList.add("show");
   modal.classList.add("active");
   const searchInput = document.getElementById("discover-search-input");
   if (searchInput) searchInput.value = "";
@@ -1242,7 +1245,10 @@ async function openDiscoverModal() {
 
 function closeDiscoverModal() {
   const modal = document.getElementById("modal-discover-umos");
-  if (modal) modal.classList.remove("active");
+  if (modal) {
+    modal.classList.remove("show");
+    modal.classList.remove("active");
+  }
 }
 
 async function loadDiscoveredUmos() {
@@ -1300,8 +1306,8 @@ function renderDiscoveredTable(filterText) {
         : (item.target_id ? `<span class="tag-platform-pill">用户: ${escapeHtml(item.target_id)}</span>` : "");
 
       const ruleBtn = item.has_rule
-        ? `<button class="btn btn-secondary btn-sm" onclick="selectDiscoveredUmo('${escapeHtml(item.umo)}')">✏️ 修改专属规则</button>`
-        : `<button class="btn btn-primary btn-sm" onclick="selectDiscoveredUmo('${escapeHtml(item.umo)}')">➕ 一键配置提示词</button>`;
+        ? `<button class="btn btn-secondary btn-sm btn-select-discovered" data-umo="${escapeHtml(item.umo)}" onclick="selectDiscoveredUmo('${escapeHtml(item.umo)}')">✏️ 修改专属规则</button>`
+        : `<button class="btn btn-primary btn-sm btn-select-discovered" data-umo="${escapeHtml(item.umo)}" onclick="selectDiscoveredUmo('${escapeHtml(item.umo)}')">➕ 一键配置提示词</button>`;
 
       const ruleStatus = item.has_rule
         ? `<span style="color:var(--success); font-weight:600; font-size:0.8rem;">已配置（${item.rule_enabled ? "生效中" : "已禁用"}）</span>`
@@ -1409,12 +1415,16 @@ function openUmoRuleModal(umo) {
     if (enabledInput) enabledInput.checked = true;
   }
 
+  modal.classList.add("show");
   modal.classList.add("active");
 }
 
 function closeUmoRuleModal() {
   const modal = document.getElementById("modal-umo-rule");
-  if (modal) modal.classList.remove("active");
+  if (modal) {
+    modal.classList.remove("show");
+    modal.classList.remove("active");
+  }
 }
 
 async function saveUmoRuleModal() {
@@ -1478,9 +1488,13 @@ async function toggleUmoRule(umo, enabled) {
 }
 
 async function deleteUmoRule(umo) {
-  if (!confirm(`确定要删除 UMO 为「${umo}」的专属提示词规则吗？删除后该会话将不再注入个性化提示词。`)) {
-    return;
+  let confirmed = true;
+  try {
+    confirmed = window.confirm(`确定要删除 UMO 为「${umo}」的专属提示词规则吗？删除后该会话将不再注入个性化提示词。`);
+  } catch (e) {
+    confirmed = true;
   }
+  if (!confirmed) return;
 
   try {
     const res = await apiPost("prompt-injector/rule/delete", { umo });
@@ -1612,6 +1626,86 @@ function bindUmoDomEvents() {
           promptInput.value = PROMPT_PRESETS[key];
         }
       }
+    });
+  }
+
+  // Delegated events for dynamic elements in rules list
+  const rulesListEl = document.getElementById("umo-rules-list");
+  if (rulesListEl) {
+    rulesListEl.addEventListener("click", (e) => {
+      // 1. Discover trigger in empty card
+      const discBtn = e.target.closest(".btn-discover-trigger");
+      if (discBtn) {
+        e.preventDefault();
+        openDiscoverModal();
+        return;
+      }
+      // 2. Add trigger in empty card
+      const addBtn = e.target.closest(".btn-add-trigger");
+      if (addBtn) {
+        e.preventDefault();
+        openUmoRuleModal("");
+        return;
+      }
+      // 3. Edit rule
+      const editBtn = e.target.closest(".btn-edit-rule");
+      if (editBtn) {
+        e.preventDefault();
+        const umo = editBtn.dataset.umo || editBtn.getAttribute("data-umo");
+        if (umo) openUmoRuleModal(umo);
+        return;
+      }
+      // 4. Delete rule
+      const delBtn = e.target.closest(".btn-delete-rule");
+      if (delBtn) {
+        e.preventDefault();
+        const umo = delBtn.dataset.umo || delBtn.getAttribute("data-umo");
+        if (umo) deleteUmoRule(umo);
+        return;
+      }
+      // 5. Copy UMO
+      const copyBtn = e.target.closest(".btn-copy-umo");
+      if (copyBtn) {
+        e.preventDefault();
+        const umo = copyBtn.dataset.umo || copyBtn.getAttribute("data-umo");
+        if (umo) copyToClipboard(umo);
+        return;
+      }
+    });
+
+    rulesListEl.addEventListener("change", (e) => {
+      const toggle = e.target.closest(".rule-toggle-checkbox");
+      if (toggle) {
+        const umo = toggle.dataset.umo || toggle.getAttribute("data-umo");
+        if (umo) toggleUmoRule(umo, toggle.checked);
+      }
+    });
+  }
+
+  // Delegated events for dynamic elements in discovered conversations table
+  const discoverContainer = document.getElementById("discover-list-container");
+  if (discoverContainer) {
+    discoverContainer.addEventListener("click", (e) => {
+      const selectBtn = e.target.closest(".btn-select-discovered");
+      if (selectBtn) {
+        e.preventDefault();
+        const umo = selectBtn.dataset.umo || selectBtn.getAttribute("data-umo");
+        if (umo) selectDiscoveredUmo(umo);
+      }
+    });
+  }
+
+  // Backdrop click to close modals
+  const discoverModal = document.getElementById("modal-discover-umos");
+  if (discoverModal) {
+    discoverModal.addEventListener("click", (e) => {
+      if (e.target === discoverModal) closeDiscoverModal();
+    });
+  }
+  const ruleModal = document.getElementById("modal-umo-rule");
+  if (ruleModal) {
+    ruleModal.addEventListener("click", (e) => {
+      if (e.target === ruleModal) closeUmoRuleModal();
     });
   }
 }
