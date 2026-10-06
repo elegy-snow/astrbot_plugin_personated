@@ -463,22 +463,22 @@
           <div class="form-group">
             <label for="modal-rule-umo">
               会话 UMO 标识 <span class="required" style="color:var(--danger)">*</span>
-              <span class="hint-text">（例如：<code>aiocqhttp:GroupMessage:12345678</code> 或从抓取列表中带入）</span>
+              <span class="hint-text">（格式如：<code>aiocqhttp:GroupMessage:12345678</code> 或直接从对话抓取）</span>
             </label>
-            <input type="text" id="modal-rule-umo" class="input-control" placeholder="格式如：aiocqhttp:GroupMessage:12345678" />
+            <input type="text" id="modal-rule-umo" class="input-control" placeholder="如：aiocqhttp:GroupMessage:12345678" />
           </div>
 
           <div class="form-grid-2">
             <div class="form-group">
               <label for="modal-rule-name">规则备注 / 群名称 / 昵称</label>
-              <input type="text" id="modal-rule-name" class="input-control" placeholder="如：测试技术交流群 / 朋友私聊" />
+              <input type="text" id="modal-rule-name" class="input-control" placeholder="如：交流群 / 朋友私聊" />
             </div>
             <div class="form-group">
               <label for="modal-rule-mode">注入模式</label>
               <select id="modal-rule-mode" class="select-control">
                 <option value="system_prompt">追加到 System Prompt (推荐)</option>
                 <option value="prepend_system">置于 System Prompt 开头</option>
-                <option value="extra_user_content">作为附加用户消息块 (Extra Content)</option>
+                <option value="extra_user_content">附加用户消息块 (Extra Content)</option>
               </select>
             </div>
           </div>
@@ -486,10 +486,9 @@
           <div class="form-group">
             <label for="modal-rule-template-select">
               快捷填入常用提示词预设
-              <span class="hint-text">可选择下方模板快速填充，并在文本框中微调</span>
             </label>
             <select id="modal-rule-template-select" class="select-control">
-              <option value="">-- 选择预设模板填入 --</option>
+              <option value="">-- 选择预设模板快速填入 --</option>
               <option value="group_assistant">【群聊模式】热情友好的群助理/破冰搭话人设</option>
               <option value="formal_work">【严肃工作】专业干练、回答简洁精准的工作助理</option>
               <option value="playful_friend">【幽默损友】轻松幽默、接地气互怼的密友风格</option>
@@ -501,19 +500,18 @@
           <div class="form-group">
             <label for="modal-rule-prompt">
               个性化专属提示词内容 <span class="required" style="color:var(--danger)">*</span>
-              <span class="hint-text">在此群聊/私聊对话时，每次请求都会自然注入这段提示词</span>
             </label>
-            <textarea id="modal-rule-prompt" class="textarea-control" rows="6" placeholder="输入该群聊/私聊专用的提示词指令..."></textarea>
+            <textarea id="modal-rule-prompt" class="textarea-control" rows="3" placeholder="输入该群聊/私聊每次对话时专属注入的提示词..."></textarea>
           </div>
 
-          <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
-            <input type="checkbox" id="modal-rule-enabled" checked style="width: 18px; height: 18px; cursor: pointer;" />
-            <label for="modal-rule-enabled" style="margin: 0; cursor: pointer; font-weight: 500;">立即启用该专属规则</label>
+          <div class="form-group" style="display: flex; flex-direction: row; align-items: center; gap: 8px; margin-top: 4px; margin-bottom: 2px;">
+            <input type="checkbox" id="modal-rule-enabled" checked style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary);" />
+            <label for="modal-rule-enabled" style="margin: 0; cursor: pointer; font-weight: 500; font-size: 0.84rem;">立即启用该专属规则</label>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="modal-umo-rule-cancel">取消</button>
-          <button class="btn btn-primary" id="modal-umo-rule-save">💾 保存并生效</button>
+          <button class="btn btn-secondary btn-sm" id="modal-umo-rule-cancel">取消</button>
+          <button class="btn btn-primary btn-sm" id="modal-umo-rule-save">💾 保存并生效</button>
         </div>
       </div>
     </div>

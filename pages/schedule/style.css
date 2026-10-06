@@ -1052,12 +1052,14 @@ select.input-control:focus {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(3px);
   z-index: 1000;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .modal-overlay.show,
@@ -1070,10 +1072,15 @@ select.input-control:focus {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   width: 100%;
-  max-width: 560px;
+  max-width: 480px;
+  max-height: min(84vh, calc(100% - 24px));
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
   animation: slideIn 0.2s ease-out;
+  box-sizing: border-box;
 }
 
 @keyframes slideIn {
@@ -1082,38 +1089,53 @@ select.input-control:focus {
 }
 
 .modal-header {
-  padding: 18px 22px;
+  padding: 12px 18px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  margin: 0;
 }
 
 .modal-close {
   background: transparent;
   border: none;
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   color: var(--text-muted);
   cursor: pointer;
   line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.modal-close:hover {
+  color: var(--text-main);
+  background: var(--bg-input);
 }
 
 .modal-body {
-  padding: 20px 22px;
+  padding: 14px 18px;
+  overflow-y: auto;
+  flex: 1;
+  box-sizing: border-box;
 }
 
 .modal-footer {
-  padding: 14px 22px;
+  padding: 10px 18px;
   background: var(--bg-input);
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -1162,13 +1184,45 @@ select.input-control:focus {
    UMO Prompt Injector View & Modals
    ========================================================================== */
 .modal-lg {
-  max-width: 900px !important;
+  max-width: 760px !important;
   width: 94% !important;
 }
 
 .modal-md {
-  max-width: 640px !important;
-  width: 90% !important;
+  max-width: 460px !important;
+  width: 92% !important;
+}
+
+#modal-umo-rule .form-group {
+  margin-bottom: 9px;
+  gap: 3px;
+}
+
+#modal-umo-rule .form-group label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 1px;
+}
+
+#modal-umo-rule .input-control,
+#modal-umo-rule select.select-control {
+  padding: 6px 10px;
+  font-size: 0.84rem;
+  height: 33px;
+}
+
+#modal-umo-rule .textarea-control {
+  padding: 6px 10px;
+  font-size: 0.84rem;
+  min-height: 56px;
+  max-height: 110px;
+  resize: vertical;
+}
+
+#modal-umo-rule .hint-text {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  margin-top: 1px;
 }
 
 .umo-rules-container {
@@ -1341,7 +1395,7 @@ select.input-control:focus {
 
 /* Discover table styling */
 .discover-table-wrap {
-  max-height: 440px;
+  max-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
