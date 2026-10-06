@@ -294,7 +294,7 @@ class TestScheduleManager(unittest.IsolatedAsyncioTestCase):
         # Test context injection into dummy request
         req = DummyProviderRequest()
         event = DummyEvent()
-        await mgr.inject_schedule_context(event, req)
+        await mgr.inject_schedule_context(event, req, dt=dt_morning)
         # Verify req.extra_user_content_parts contains injected content
         self.assertTrue(len(req.extra_user_content_parts) > 0)
         self.assertIn("【角色当前作息与实时状态】", req.extra_user_content_parts[0].text)
@@ -308,8 +308,9 @@ class TestScheduleManager(unittest.IsolatedAsyncioTestCase):
 
 
 class MockRequest:
-    def __init__(self, data: dict):
-        self._data = data
+    def __init__(self, data: dict = None, query: dict = None):
+        self._data = data or {}
+        self.query = query or {}
 
     async def json(self, default=None):
         return self._data
@@ -398,6 +399,74 @@ class TestScheduleWebApi(unittest.IsolatedAsyncioTestCase):
         up_data = up_resp.get("data") if isinstance(up_resp, dict) and "data" in up_resp else up_resp
         self.assertTrue(up_data.get("updated"))
         self.assertEqual(up_data["item"]["activity"], "正在跑步机上慢跑")
+
+        # 7. Test save_full_schedule (custom date)
+        target_date = "2026-05-20"
+        full_schedule_payload = {
+            "date": target_date,
+            "weekday": "三",
+            "persona_id": "test_persona",
+            "provider_used": "custom_provider",
+            "items": [
+                {
+                    "id": "item_1",
+                    "name": "晨间漫步",
+                    "start": "07:00",
+                    "end": "08:00",
+                    "activity": "在公园散步看日出",
+                    "state": "神清气爽",
+                },
+                {
+                    "id": "item_2",
+                    "name": "夜间阅读",
+                    "start": "21:00",
+                    "end": "22:30",
+                    "activity": "阅读侦探小说",
+                    "state": "沉浸平静",
+                },
+            ],
+        }
+        web_api_mod.request = MockRequest(full_schedule_payload)
+        save_full_resp = await api.save_full_schedule()
+        save_full_data = save_full_resp.get("data") if isinstance(save_full_resp, dict) and "data" in save_full_resp else save_full_resp
+        self.assertTrue(save_full_data.get("saved"))
+
+        # 8. Test get_schedule_detail
+        web_api_mod.request = MockRequest(query={"date": target_date})
+        detail_resp = await api.get_schedule_detail()
+        detail_data = detail_resp.get("data") if isinstance(detail_resp, dict) and "data" in detail_resp else detail_resp
+        self.assertTrue(detail_data.get("found"))
+        self.assertEqual(detail_data["date"], target_date)
+        self.assertEqual(len(detail_data["schedule"]["items"]), 2)
+        self.assertEqual(detail_data["schedule"]["items"][0]["activity"], "在公园散步看日出")
+
+        # 9. Test get_dates
+        dates_resp = await api.get_dates()
+        dates_data = dates_resp.get("data") if isinstance(dates_resp, dict) and "data" in dates_resp else dates_resp
+        self.assertIn("dates", dates_data)
+        date_records = dates_data["dates"]
+        found_target = any(d["date"] == target_date for d in date_records)
+        self.assertTrue(found_target)
+
+        # 10. Test generate_for_date
+        gen_date = "2026-06-01"
+        web_api_mod.request = MockRequest({"date": gen_date})
+        gen_date_resp = await api.generate_for_date()
+        gen_date_data = gen_date_resp.get("data") if isinstance(gen_date_resp, dict) and "data" in gen_date_resp else gen_date_resp
+        self.assertTrue(gen_date_data.get("success"))
+        self.assertEqual(gen_date_data["schedule"]["date"], gen_date)
+
+        # 11. Test delete_for_date
+        web_api_mod.request = MockRequest({"date": target_date})
+        del_resp = await api.delete_for_date()
+        del_data = del_resp.get("data") if isinstance(del_resp, dict) and "data" in del_resp else del_resp
+        self.assertTrue(del_data.get("deleted"))
+
+        # Verify deletion in get_schedule_detail
+        web_api_mod.request = MockRequest(query={"date": target_date})
+        detail_after_del = await api.get_schedule_detail()
+        detail_after_data = detail_after_del.get("data") if isinstance(detail_after_del, dict) and "data" in detail_after_del else detail_after_del
+        self.assertFalse(detail_after_data.get("found"))
 
         await mgr.terminate()
 

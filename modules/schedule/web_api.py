@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List
 
 try:
-    from ...utils.time_utils import parse_time_str
+    from ...utils.time_utils import get_today_str, get_weekday_cn, parse_time_str
 except (ImportError, ValueError):
-    from utils.time_utils import parse_time_str
-from .model import DailyScheduleItem, ScheduleSegment
+    from utils.time_utils import get_today_str, get_weekday_cn, parse_time_str
+from .model import DailySchedule, DailyScheduleItem, ScheduleSegment
 
 try:
     from astrbot.api.web import error_response, json_response, request
@@ -46,6 +47,11 @@ class ScheduleWebApi:
             (f"/{PLUGIN_NAME}/schedule/today", self.get_today, ["GET"], "获取今日日程及当前生效状态"),
             (f"/{PLUGIN_NAME}/schedule/generate", self.generate_today, ["POST"], "立即触发重新生成今日日程"),
             (f"/{PLUGIN_NAME}/schedule/item/update", self.update_item, ["POST"], "实时编辑今日某个时段的活动与状态"),
+            (f"/{PLUGIN_NAME}/schedule/dates", self.get_dates, ["GET"], "获取所有已保存日程的日期列表"),
+            (f"/{PLUGIN_NAME}/schedule/detail", self.get_schedule_detail, ["GET"], "获取指定日期的日程详情"),
+            (f"/{PLUGIN_NAME}/schedule/save-full", self.save_full_schedule, ["POST"], "保存或更新整日日程安排"),
+            (f"/{PLUGIN_NAME}/schedule/generate-date", self.generate_for_date, ["POST"], "为指定日期生成日程"),
+            (f"/{PLUGIN_NAME}/schedule/delete-date", self.delete_for_date, ["POST"], "删除指定日期的日程"),
         ]
 
         for route, handler, methods, desc in routes:
@@ -216,5 +222,157 @@ class ScheduleWebApi:
                 "updated": True,
                 "item": target_item.to_dict(),
                 "message": "时段活动与状态更新成功！",
+            }
+        )
+
+    async def get_dates(self) -> Any:
+        """GET /{PLUGIN_NAME}/schedule/dates"""
+        dates = self.mgr.get_available_dates()
+        return json_response({"dates": dates})
+
+    async def get_schedule_detail(self) -> Any:
+        """GET /{PLUGIN_NAME}/schedule/detail?date=YYYY-MM-DD"""
+        date_str = None
+        if request and hasattr(request, "query"):
+            date_str = request.query.get("date")
+        if not date_str:
+            date_str = get_today_str()
+
+        schedule = self.mgr.get_schedule_by_date(date_str)
+        if schedule is None and date_str == get_today_str() and self.mgr._current_schedule:
+            schedule = self.mgr._current_schedule
+
+        if schedule:
+            return json_response(
+                {
+                    "found": True,
+                    "date": date_str,
+                    "schedule": schedule.to_dict(),
+                }
+            )
+        return json_response(
+            {
+                "found": False,
+                "date": date_str,
+                "schedule": None,
+                "message": f"日期 {date_str} 尚未生成日程安排。",
+            }
+        )
+
+    async def save_full_schedule(self) -> Any:
+        """POST /{PLUGIN_NAME}/schedule/save-full"""
+        if request is None:
+            return error_response("Request context unavailable", 500)
+
+        payload = await request.json(default={})
+        if not isinstance(payload, dict):
+            return error_response("Payload must be a JSON object", 400)
+
+        date_str = str(payload.get("date", "")).strip()
+        if not date_str:
+            date_str = get_today_str()
+
+        # Validate date format
+        try:
+            target_dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return error_response(f"日期格式无效：'{date_str}'，应为 YYYY-MM-DD", 400)
+
+        raw_items = payload.get("items", [])
+        if not isinstance(raw_items, list):
+            return error_response("items 必须是数组", 400)
+
+        schedule_items: List[DailyScheduleItem] = []
+        for idx, item_data in enumerate(raw_items):
+            if not isinstance(item_data, dict):
+                continue
+
+            item_id = str(item_data.get("id") or f"seg_{idx + 1}").strip()
+            name = str(item_data.get("name") or f"时段 {idx + 1}").strip()
+            start = str(item_data.get("start", "00:00")).strip()
+            end = str(item_data.get("end", "00:00")).strip()
+            activity = str(item_data.get("activity", "日常活动")).strip()
+            state = str(item_data.get("state", "平静")).strip()
+
+            try:
+                parse_time_str(start)
+                parse_time_str(end)
+            except ValueError as e:
+                return error_response(f"时段【{name}】时间格式错误：{e}", 400)
+
+            schedule_items.append(
+                DailyScheduleItem(
+                    id=item_id,
+                    name=name,
+                    start=start,
+                    end=end,
+                    activity=activity,
+                    state=state,
+                )
+            )
+
+        weekday = str(payload.get("weekday") or get_weekday_cn(target_dt))
+        persona_id = str(payload.get("persona_id") or "default")
+        provider_used = str(payload.get("provider_used") or "manual_edit")
+        generated_at = str(payload.get("generated_at") or datetime.datetime.now().isoformat())
+
+        daily_schedule = DailySchedule(
+            date=date_str,
+            weekday=weekday,
+            persona_id=persona_id,
+            generated_at=generated_at,
+            provider_used=provider_used,
+            items=schedule_items,
+        )
+
+        self.mgr.save_schedule_for_date(daily_schedule)
+        return json_response(
+            {
+                "saved": True,
+                "schedule": daily_schedule.to_dict(),
+                "message": f"成功保存 {date_str} 的日程安排（共 {len(schedule_items)} 个时段）！",
+            }
+        )
+
+    async def generate_for_date(self) -> Any:
+        """POST /{PLUGIN_NAME}/schedule/generate-date"""
+        if request is None:
+            return error_response("Request context unavailable", 500)
+
+        payload = await request.json(default={})
+        date_str = str(payload.get("date") or get_today_str()).strip()
+
+        try:
+            schedule = await self.mgr.generate_schedule_for_date(date_str, force=True)
+            return json_response(
+                {
+                    "success": True,
+                    "schedule": schedule.to_dict(),
+                    "message": f"已成功为 {date_str} 生成 {len(schedule.items)} 个时段日程！",
+                }
+            )
+        except Exception as e:
+            self.logger.error("Error generating schedule for %s: %s", date_str, e, exc_info=True)
+            return error_response(f"生成日程失败: {e}", 500)
+
+    async def delete_for_date(self) -> Any:
+        """POST /{PLUGIN_NAME}/schedule/delete-date"""
+        if request is None:
+            return error_response("Request context unavailable", 500)
+
+        payload = await request.json(default={})
+        date_str = str(payload.get("date") or "").strip()
+        if not date_str and hasattr(request, "query"):
+            date_str = str(request.query.get("date") or "").strip()
+
+        if not date_str:
+            return error_response("未指定要删除的日期", 400)
+
+        deleted = self.mgr.delete_schedule_for_date(date_str)
+        return json_response(
+            {
+                "deleted": deleted,
+                "date": date_str,
+                "message": f"已删除 {date_str} 的日程数据" if deleted else f"未找到日期 {date_str} 的日程记录",
             }
         )

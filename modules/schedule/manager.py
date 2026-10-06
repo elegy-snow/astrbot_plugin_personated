@@ -517,12 +517,19 @@ class ScheduleManager(BaseFeatureModule):
         self,
         event: AstrMessageEvent,
         req: ProviderRequest,
+        dt: Optional[datetime.datetime] = None,
     ) -> None:
-        """Inject the current matching schedule item into the LLM conversation request."""
+        """Inject the current matching schedule item into the LLM conversation request.
+
+        Args:
+            event: The incoming message event.
+            req: ProviderRequest being assembled.
+            dt: Optional explicit datetime, defaults to current system time.
+        """
         if not self.inject_context_enabled:
             return
 
-        now = datetime.datetime.now()
+        now = dt if dt is not None else datetime.datetime.now()
         today_str = get_today_str(now)
 
         # Check if we have today's schedule ready
@@ -598,3 +605,66 @@ class ScheduleManager(BaseFeatureModule):
             "active_segment": active_item.to_dict() if active_item else None,
             "today_schedule": self._current_schedule.to_dict() if self._current_schedule else None,
         }
+
+    # --------------------------------------------------------------------------
+    # Date-based Schedule CRUD Operations
+    # --------------------------------------------------------------------------
+
+    def get_available_dates(self) -> List[Dict[str, Any]]:
+        """Return a sorted list of all dates that currently have saved schedules."""
+        dates = []
+        for d_str, data in sorted(self._schedules_history.items(), key=lambda x: x[0], reverse=True):
+            if isinstance(data, dict):
+                items = data.get("items", [])
+                dates.append(
+                    {
+                        "date": d_str,
+                        "weekday": data.get("weekday", ""),
+                        "items_count": len(items) if isinstance(items, list) else 0,
+                        "provider_used": data.get("provider_used", ""),
+                        "generated_at": data.get("generated_at", ""),
+                    }
+                )
+        return dates
+
+    def get_schedule_by_date(self, date_str: str) -> Optional[DailySchedule]:
+        """Retrieve a specific date's schedule."""
+        if date_str in self._schedules_history:
+            try:
+                return DailySchedule.from_dict(self._schedules_history[date_str])
+            except Exception as e:
+                self.logger.warning("Failed to parse schedule for date %s: %s", date_str, e)
+        return None
+
+    def save_schedule_for_date(self, schedule: DailySchedule) -> None:
+        """Persist or update a schedule for a specific date."""
+        self._schedules_history[schedule.date] = schedule.to_dict()
+        if schedule.date == get_today_str():
+            self._current_schedule = schedule
+        self._save_to_storage()
+        self.logger.info("Saved schedule for date %s with %d items.", schedule.date, len(schedule.items))
+
+    def delete_schedule_for_date(self, date_str: str) -> bool:
+        """Delete a saved schedule for a specific date."""
+        if date_str in self._schedules_history:
+            del self._schedules_history[date_str]
+            if self._current_schedule and self._current_schedule.date == date_str:
+                self._current_schedule = None
+            self._save_to_storage()
+            self.logger.info("Deleted schedule for date %s.", date_str)
+            return True
+        return False
+
+    async def generate_schedule_for_date(
+        self,
+        date_str: str,
+        force: bool = True,
+        umo: str = "",
+    ) -> DailySchedule:
+        """Generate a schedule for a specified date (past, today, or future)."""
+        try:
+            target_dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            target_dt = datetime.datetime.now()
+
+        return await self.generate_today_schedule(force=force, dt=target_dt, umo=umo)

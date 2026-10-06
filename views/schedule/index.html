@@ -3,194 +3,387 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>拟人化日程管理</title>
+  <title>拟人化综合伴侣 - 控制台</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="app-container">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-main">
-        <div class="header-titles">
-          <h1>🕒 拟人化日程管理</h1>
-          <p class="subtitle">每日作息规划、时间段定义与实时上下文看板</p>
-        </div>
-        <div class="header-clock-panel">
-          <div class="clock-time" id="clock-time">--:--:--</div>
-          <div class="clock-date" id="clock-date">----年--月--日 星期-</div>
+  <div class="dashboard-layout">
+    <!-- Left Sidebar: Modern Multi-Module Navigation -->
+    <aside class="dashboard-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">✨</div>
+        <div class="brand-text">
+          <div class="brand-name">Personated</div>
+          <div class="brand-sub">拟人化伴侣 v1.0.0</div>
         </div>
       </div>
-      <div class="header-status-bar" id="header-status-bar">
-        <span class="status-indicator"></span>
-        <span id="current-active-desc">正在同步日程状态...</span>
-      </div>
-    </header>
 
-    <!-- Navigation Tabs -->
-    <nav class="nav-tabs">
-      <button class="tab-btn active" data-tab="tab-today">📅 今日作息看板</button>
-      <button class="tab-btn" data-tab="tab-settings">⚙️ 时间段与系统设置</button>
-    </nav>
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">核心功能模块</div>
+        <ul class="nav-list">
+          <li class="nav-item active" data-view="view-live">
+            <span class="nav-icon">🕒</span>
+            <span class="nav-label">今日即时看板</span>
+            <span class="nav-status-dot"></span>
+          </li>
+          <li class="nav-item" data-view="view-editor">
+            <span class="nav-icon">📅</span>
+            <span class="nav-label">日程查看与编辑</span>
+            <span class="badge badge-primary">新功能</span>
+          </li>
+          <li class="nav-item" data-view="view-rules">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">作息规则与分段</span>
+          </li>
+        </ul>
 
-    <!-- TAB 1: 今日作息看板 -->
-    <main id="tab-today" class="tab-content active">
-      <!-- 实时状态大卡片 -->
-      <section class="card current-status-card" id="current-status-card">
-        <div class="card-header">
-          <h2>🌟 当前进行中时段</h2>
-          <span class="badge active-badge" id="now-segment-badge">检测中</span>
+        <div class="nav-section-title">综合扩展规划</div>
+        <ul class="nav-list nav-list-future">
+          <li class="nav-item disabled" title="功能正在规划与接入中">
+            <span class="nav-icon">🧠</span>
+            <span class="nav-label">记忆与好感度</span>
+            <span class="badge badge-gray">即将推出</span>
+          </li>
+          <li class="nav-item disabled" title="功能正在规划与接入中">
+            <span class="nav-icon">💬</span>
+            <span class="nav-label">离线问候与搭话</span>
+            <span class="badge badge-gray">即将推出</span>
+          </li>
+          <li class="nav-item disabled" title="功能正在规划与接入中">
+            <span class="nav-icon">📖</span>
+            <span class="nav-label">拟人生活日记</span>
+            <span class="badge badge-gray">即将推出</span>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="plugin-info-badge">
+          <span class="status-indicator online"></span>
+          <span>插件服务运行正常</span>
         </div>
-        <div class="current-activity-body">
-          <div class="activity-field">
-            <span class="field-label">当前正在进行：</span>
-            <p class="field-value highlight" id="now-activity">--</p>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="dashboard-main">
+      <!-- Top Action & Status Bar -->
+      <header class="dashboard-header">
+        <div class="header-breadcrumb">
+          <span class="breadcrumb-root">拟人化伴侣</span>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current" id="breadcrumb-title">今日即时看板</span>
+        </div>
+
+        <div class="header-right-tools">
+          <div class="header-clock" id="header-clock-pill">
+            <span class="clock-icon">🕒</span>
+            <span class="clock-val" id="clock-display">--:--:--</span>
+            <span class="clock-date" id="date-display">----/--/--</span>
           </div>
-          <div class="activity-field">
-            <span class="field-label">当下心情与心理状态：</span>
-            <p class="field-value" id="now-state">--</p>
+          <button class="btn btn-secondary btn-sm" id="btn-global-refresh" title="刷新所有数据">
+            🔄 刷新
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEW 1: 今日即时作息看板 -->
+      <section id="view-live" class="view-panel active">
+        <!-- 实时当前进行中大卡片 -->
+        <div class="card hero-status-card" id="hero-status-card">
+          <div class="hero-header">
+            <div class="hero-title-group">
+              <span class="pulse-indicator"></span>
+              <h2>当前进行中时段</h2>
+              <span class="badge badge-active" id="live-segment-badge">检测中...</span>
+            </div>
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-sm" id="btn-quick-edit-now">✏️ 快捷修改当前状态</button>
+            </div>
+          </div>
+
+          <div class="hero-body">
+            <div class="hero-field">
+              <div class="field-title">📍 此刻身处环境与正在进行的事：</div>
+              <div class="field-content highlight-content" id="live-activity-text">正在同步...</div>
+            </div>
+            <div class="hero-field">
+              <div class="field-title">💭 当下的心情与心理状态：</div>
+              <div class="field-content" id="live-state-text">--</div>
+            </div>
+          </div>
+
+          <div class="hero-footer">
+            <span class="tip-text">💡 对话注入已启用：与用户聊天时，Bot 将自然带入此时段的生活环境与心理活动。</span>
+          </div>
+        </div>
+
+        <!-- 统计与快捷操作栏 -->
+        <div class="action-banner">
+          <div class="banner-stats">
+            <div class="stat-item">
+              <span class="stat-label">今日日期</span>
+              <span class="stat-val" id="stat-today-date">--</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">时段总数</span>
+              <span class="stat-val" id="stat-today-count">0 段</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">生成模型</span>
+              <span class="stat-val" id="stat-today-model">--</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">自动生成时刻</span>
+              <span class="stat-val" id="stat-today-gentime">04:00</span>
+            </div>
+          </div>
+          <div class="banner-btns">
+            <button class="btn btn-primary" id="btn-live-regenerate">✨ 重新生成今日日程</button>
+            <button class="btn btn-secondary" id="btn-switch-to-editor">📋 进入日程编辑器</button>
+          </div>
+        </div>
+
+        <!-- 全天时间轴 -->
+        <div class="card timeline-card-wrap">
+          <div class="card-header-bar">
+            <h3>📅 今日作息时间轴流转</h3>
+            <span class="header-note">按 24 小时时间序排列</span>
+          </div>
+          <div class="timeline-container" id="live-timeline-list">
+            <div class="loading-box">正在加载今日作息数据...</div>
           </div>
         </div>
       </section>
 
-      <!-- 操作工具栏 -->
-      <div class="toolbar">
-        <div class="toolbar-info">
-          <span>今日生成模型：<strong id="info-provider">--</strong></span>
-          <span class="separator">|</span>
-          <span>生成时刻：<strong id="info-gentime">--</strong></span>
-        </div>
-        <div class="toolbar-actions">
-          <button class="btn btn-secondary" id="btn-refresh-view">🔄 刷新数据</button>
-          <button class="btn btn-primary" id="btn-regenerate">✨ 重新生成今日日程</button>
-        </div>
-      </div>
+      <!-- VIEW 2: 日程查看与详细编辑 (支持任意日期、查看/增删改日程信息) -->
+      <section id="view-editor" class="view-panel">
+        <!-- 日期导航与筛选栏 -->
+        <div class="card editor-nav-card">
+          <div class="date-picker-row">
+            <div class="date-quick-btns">
+              <button class="btn btn-secondary btn-sm" id="btn-date-prev">◀ 前一天</button>
+              <button class="btn btn-outline btn-sm active" id="btn-date-today">今天</button>
+              <button class="btn btn-secondary btn-sm" id="btn-date-next">后一天 ▶</button>
+            </div>
 
-      <!-- 全天时间轴列表 -->
-      <section class="timeline-section">
-        <h3>全天日程时间轴</h3>
-        <div class="timeline-container" id="timeline-container">
-          <div class="empty-state">正在加载今日日程...</div>
+            <div class="date-input-group">
+              <label for="editor-date-input">选择指定日期：</label>
+              <input type="date" id="editor-date-input" class="input-control input-date" />
+            </div>
+
+            <div class="date-history-select-group">
+              <label for="select-history-dates">历史已存档日期：</label>
+              <select id="select-history-dates" class="input-control">
+                <option value="">加载中...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="date-meta-bar" id="date-meta-bar">
+            <div class="meta-tag-group">
+              <span class="meta-tag date-tag" id="editor-meta-date">2026-05-03 星期日</span>
+              <span class="meta-tag" id="editor-meta-count">共 0 个时段</span>
+              <span class="meta-tag" id="editor-meta-provider">模型: --</span>
+              <span class="meta-tag" id="editor-meta-gentime">生成于: --</span>
+            </div>
+
+            <div class="editor-top-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-editor-add-item">➕ 添加事项</button>
+              <button class="btn btn-outline btn-sm" id="btn-editor-regenerate">✨ 重新生成该日</button>
+              <button class="btn btn-primary btn-sm" id="btn-editor-save-all">💾 保存所有修改</button>
+              <button class="btn btn-danger-outline btn-sm" id="btn-editor-delete-day" title="删除当前所选日期的日程存档">🗑️ 删除此日</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 视图切换与展示区 -->
+        <div class="card editor-list-card">
+          <div class="card-header-bar">
+            <div class="view-mode-tabs">
+              <button class="view-mode-btn active" data-mode="cards">卡片流视图</button>
+              <button class="view-mode-btn" data-mode="table">表格编辑视图</button>
+            </div>
+            <div class="view-hints">
+              <span>提示：修改后请点击右上角<strong>「保存所有修改」</strong>完成持久化。</span>
+            </div>
+          </div>
+
+          <!-- 卡片流视图容器 -->
+          <div id="editor-cards-container" class="editor-cards-container">
+            <div class="loading-box">正在读取日程数据...</div>
+          </div>
+
+          <!-- 表格编辑视图容器 -->
+          <div id="editor-table-container" class="editor-table-container" style="display: none;">
+            <table class="editor-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">序号</th>
+                  <th style="width: 140px;">时段名称</th>
+                  <th style="width: 120px;">开始时刻</th>
+                  <th style="width: 120px;">结束时刻</th>
+                  <th>当前正在做的事 (Activity)</th>
+                  <th style="width: 220px;">心理状态/心情 (State)</th>
+                  <th style="width: 110px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="editor-table-body">
+                <!-- 动态填充 -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
-    </main>
 
-    <!-- TAB 2: 时间段与系统设置 -->
-    <main id="tab-settings" class="tab-content">
-      <!-- 基础生成配置 -->
-      <section class="card">
-        <div class="card-header">
-          <h2>⏰ 每日生成与模型设定</h2>
+      <!-- VIEW 3: 作息规则与分段模板设置 -->
+      <section id="view-rules" class="view-panel">
+        <!-- 每日定时与模型选择 -->
+        <div class="card">
+          <div class="card-header-bar">
+            <h3>⏰ 每日作息生成与模型参数</h3>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="rules-gen-time">
+                每日自动生成时刻 (24小时制)
+                <span class="hint-text">每天在此时间点自动为当天规划作息安排</span>
+              </label>
+              <input type="time" id="rules-gen-time" class="input-control" value="04:00" />
+            </div>
+
+            <div class="form-group">
+              <label for="rules-provider-select">
+                指定生成大模型提供商
+                <span class="hint-text">未指定或留空时将自动回退使用当前对话模型</span>
+              </label>
+              <select id="rules-provider-select" class="input-control">
+                <option value="">(留空自动回退对话模型)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="rules-inject-mode">
+                对话上下文注入方式
+                <span class="hint-text">推荐使用附加用户内容块（保护模型 KV Cache 缓存）</span>
+              </label>
+              <select id="rules-inject-mode" class="input-control">
+                <option value="extra_user_content">附加用户内容块 (extra_user_content - 推荐)</option>
+                <option value="system_prompt">追加到人设提示词末尾 (system_prompt)</option>
+              </select>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="rules-inject-enabled" checked />
+                <span class="checkbox-custom"></span>
+                <span>启用对话上下文注入（在匹配时段内与 Bot 对话时自动代入当前日程与状态）</span>
+              </label>
+            </div>
+          </div>
         </div>
-        <div class="form-grid">
+
+        <!-- 每日时间段模板划分 -->
+        <div class="card">
+          <div class="card-header-bar">
+            <div>
+              <h3>📋 每日时间段划分模板 (Template)</h3>
+              <p class="section-desc">定义一天划分多少段作息及起止时刻（24h制，精确到分钟，支持跨午夜）。新生成的日程将以此模板为骨架。</p>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-rules-reset-preset">恢复默认预设</button>
+              <button class="btn btn-outline btn-sm" id="btn-rules-add-segment">➕ 添加新时间段</button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="segments-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">序号</th>
+                  <th style="width: 130px;">时段标识 ID</th>
+                  <th>时段名称</th>
+                  <th style="width: 120px;">开始时刻</th>
+                  <th style="width: 120px;">结束时刻</th>
+                  <th style="width: 80px;">类型</th>
+                  <th style="width: 110px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="rules-segments-tbody">
+                <!-- 动态填充 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 高级 Prompt 模板 -->
+        <div class="card">
+          <div class="card-header-bar">
+            <h3>📝 高级日程生成提示词模板 (Prompt Template)</h3>
+          </div>
           <div class="form-group">
-            <label for="input-gen-time">
-              每日自动生成时刻 (24小时制)
-              <span class="hint-text">每天在此时间点自动为当天规划作息</span>
+            <label for="rules-prompt-template">
+              自定义生成 Prompt
+              <span class="hint-text">支持插值变量：<code>{persona_prompt}</code>、<code>{date}</code>、<code>{weekday}</code>、<code>{segments_desc}</code></span>
             </label>
-            <input type="time" id="input-gen-time" value="04:00" class="input-control" />
+            <textarea id="rules-prompt-template" class="textarea-control" rows="6"></textarea>
           </div>
+        </div>
 
-          <div class="form-group">
-            <label for="select-provider">
-              指定生成模型提供商
-              <span class="hint-text">未指定或留空时将自动回退使用当前对话模型</span>
-            </label>
-            <select id="select-provider" class="input-control">
-              <option value="">(留空自动回退对话模型)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="select-inject-mode">
-              对话上下文注入模式
-              <span class="hint-text">推荐使用附加用户块（保护服务端模型KV缓存）</span>
-            </label>
-            <select id="select-inject-mode" class="input-control">
-              <option value="extra_user_content">附加用户内容块 (extra_user_content - 推荐)</option>
-              <option value="system_prompt">追加到人设提示词末尾 (system_prompt)</option>
-            </select>
-          </div>
-
-          <div class="form-group checkbox-group">
-            <label class="checkbox-label">
-              <input type="checkbox" id="checkbox-inject-enabled" checked />
-              <span class="checkbox-custom"></span>
-              <span>启用对话上下文注入（对话时自动代入当前日程与状态）</span>
-            </label>
-          </div>
+        <!-- 保存按钮栏 -->
+        <div class="save-bar">
+          <button class="btn btn-primary btn-lg" id="btn-rules-save-all">💾 保存所有规则配置</button>
         </div>
       </section>
+    </div>
 
-      <!-- 时间段划分列表管理 -->
-      <section class="card segments-card">
-        <div class="card-header">
-          <div>
-            <h2>📋 每日时间段划分管理</h2>
-            <p class="section-desc">自定义一天划分几段作息及精确起止时刻（24h制，精确到分钟，支持跨午夜）。</p>
-          </div>
-          <div class="card-actions">
-            <button class="btn btn-secondary btn-sm" id="btn-reset-segments">恢复默认预设</button>
-            <button class="btn btn-outline btn-sm" id="btn-add-segment">➕ 添加新时间段</button>
-          </div>
-        </div>
-
-        <div class="segments-table-wrapper">
-          <table class="segments-table">
-            <thead>
-              <tr>
-                <th style="width: 60px;">序号</th>
-                <th style="width: 140px;">时间段标识 ID</th>
-                <th>时段名称</th>
-                <th style="width: 130px;">开始时刻</th>
-                <th style="width: 130px;">结束时刻</th>
-                <th style="width: 90px;">特性</th>
-                <th style="width: 120px;">操作</th>
-              </tr>
-            </thead>
-            <tbody id="segments-table-body">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 保存操作栏 -->
-      <div class="save-bar">
-        <span id="save-status-msg" class="save-status-msg"></span>
-        <button class="btn btn-primary btn-lg" id="btn-save-settings">💾 保存所有配置</button>
-      </div>
-    </main>
-
-    <!-- 编辑单个时段活动模态框 -->
-    <div class="modal-overlay" id="edit-modal">
+    <!-- 弹窗：编辑/添加单个日程事项模态框 -->
+    <div class="modal-overlay" id="item-modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 id="modal-title">编辑今日时段安排</h3>
-          <button class="modal-close" id="modal-close">&times;</button>
+          <h3 id="modal-item-title">编辑时段安排</h3>
+          <button class="modal-close" id="modal-item-close">&times;</button>
         </div>
         <div class="modal-body">
-          <input type="hidden" id="edit-item-id" />
-          <div class="form-group">
-            <label>时段名称与范围</label>
-            <p id="edit-item-meta" class="item-meta-text">--</p>
+          <input type="hidden" id="modal-item-id" />
+          <input type="hidden" id="modal-item-index" />
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="modal-input-name">时段名称</label>
+              <input type="text" id="modal-input-name" class="input-control" placeholder="如：上午工作/学习" />
+            </div>
+            <div class="form-group">
+              <label for="modal-input-id">时段标识 ID</label>
+              <input type="text" id="modal-input-id-val" class="input-control" placeholder="如：morning_work" />
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="modal-input-start">开始时刻 (24h)</label>
+              <input type="time" id="modal-input-start" class="input-control" />
+            </div>
+            <div class="form-group">
+              <label for="modal-input-end">结束时刻 (24h)</label>
+              <input type="time" id="modal-input-end" class="input-control" />
+            </div>
           </div>
           <div class="form-group">
-            <label for="edit-item-activity">当前具体在做的事情 (Activity)</label>
-            <textarea id="edit-item-activity" class="textarea-control" rows="3"></textarea>
+            <label for="modal-input-activity">当前具体在做的事 (Activity)</label>
+            <textarea id="modal-input-activity" class="textarea-control" rows="3" placeholder="描述该时段内角色的具体活动与环境细节..."></textarea>
           </div>
           <div class="form-group">
-            <label for="edit-item-state">当前心情与心理状态 (State)</label>
-            <input type="text" id="edit-item-state" class="input-control" />
+            <label for="modal-input-state">心情与心理状态 (State / Emotion)</label>
+            <input type="text" id="modal-input-state" class="input-control" placeholder="描述角色的精神面貌与当下心理..." />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="modal-cancel">取消</button>
-          <button class="btn btn-primary" id="modal-save">保存修改</button>
+          <button class="btn btn-secondary" id="modal-item-cancel">取消</button>
+          <button class="btn btn-primary" id="modal-item-save">确定并更新</button>
         </div>
       </div>
     </div>
 
-    <!-- Toast Notification -->
+    <!-- 浮动 Toast 提示 -->
     <div id="toast" class="toast"></div>
   </div>
 
