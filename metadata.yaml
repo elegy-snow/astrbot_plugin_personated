@@ -19,6 +19,10 @@ support_platforms:
   - satori
   - webchat
 astrbot_version: ">=4.5.7"
+pages:
+  - name: schedule
+    title: 拟人化日程管理
+    desc: 可视化日程时间轴、实时状态看板与作息规则管理
 views:
   - name: schedule
     title: 拟人化日程管理
