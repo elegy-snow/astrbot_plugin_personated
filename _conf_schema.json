@@ -1,0 +1,80 @@
+{
+  "daily_generate_time": {
+    "description": "每日生成日程时间 (24h HH:MM)",
+    "type": "string",
+    "default": "04:00",
+    "hint": "24小时制，精确到分钟，格式 HH:MM。每天到达此时间后将自动生成当天的全天作息日程。"
+  },
+  "schedule_provider_id": {
+    "description": "指定日程生成模型",
+    "type": "string",
+    "default": "",
+    "hint": "选择用于生成日程的大模型提供商。留空则自动回退使用当前的对话模型。",
+    "_special": "select_provider"
+  },
+  "inject_context_enabled": {
+    "description": "启用对话上下文注入",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，在对应时间段与Bot对话时，会自动将Bot当前的日程、活动和心理状态注入到对话上下文中。"
+  },
+  "inject_mode": {
+    "description": "上下文注入方式",
+    "type": "string",
+    "default": "extra_user_content",
+    "options": [
+      "extra_user_content",
+      "system_prompt"
+    ],
+    "hint": "extra_user_content：作为附加用户内容块注入（官方推荐，保持缓存命中）；system_prompt：追加到人设提示词末尾。"
+  },
+  "schedule_segments": {
+    "description": "每日日程时间段划分",
+    "type": "list",
+    "default": [
+      {
+        "id": "morning_early",
+        "name": "清晨苏醒与晨练",
+        "start": "06:00",
+        "end": "08:30"
+      },
+      {
+        "id": "morning_work",
+        "name": "上午工作/学习",
+        "start": "08:30",
+        "end": "12:00"
+      },
+      {
+        "id": "lunch_rest",
+        "name": "午休与用餐",
+        "start": "12:00",
+        "end": "14:00"
+      },
+      {
+        "id": "afternoon_work",
+        "name": "下午工作/日常",
+        "start": "14:00",
+        "end": "18:00"
+      },
+      {
+        "id": "evening_leisure",
+        "name": "傍晚娱乐与晚餐",
+        "start": "18:00",
+        "end": "22:00"
+      },
+      {
+        "id": "night_sleep",
+        "name": "夜间就寝休息",
+        "start": "22:00",
+        "end": "06:00"
+      }
+    ],
+    "hint": "定义一天的时间段划分。支持任意段数及自定义时间（24小时制 HH:MM，精确到分）。支持跨午夜时间段（如 22:00 至 06:00）。"
+  },
+  "custom_prompt_template": {
+    "description": "日程生成提示词模板",
+    "type": "text",
+    "default": "你正在为一个具体的人格角色规划一天的真实作息与生活日程。\n【角色人设】：\n{persona_prompt}\n\n今天是 {date}（星期{weekday}）。\n请根据该人设性格、日常喜好、职业/身份特点以及生活节奏，为今天指定的各个时间段分别规划具体的活动事件、心理状态/心情以及细节。\n\n今天的时间段安排如下：\n{segments_desc}\n\n【返回规范】：\n请严格返回 JSON 数组格式（不要包含任何 markdown 代码块包裹，也不要有任何其他文字），数组每个元素对应一个时间段，字段包含：\n- id: 时间段ID\n- name: 时间段名称\n- start: 开始时间\n- end: 结束时间\n- activity: 当前具体在做的事情和所处环境（生动拟人化）\n- state: 当前心情、精神状态与心理活动",
+    "hint": "生成日程时发给大模型的提示词。支持变量：{persona_prompt}（人设提示词）, {date}（日期）, {weekday}（星期几）, {segments_desc}（时间段列表）。"
+  }
+}

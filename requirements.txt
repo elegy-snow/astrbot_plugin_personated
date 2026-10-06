@@ -1,0 +1,2 @@
+# requirements.txt for astrbot_plugin_personated
+# Core AstrBot dependencies are provided by the host environment.
