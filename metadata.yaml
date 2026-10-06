@@ -1,8 +1,8 @@
 name: astrbot_plugin_personated
 display_name: 拟人化综合伴侣
-desc: 拟人化综合功能集合插件，支持每日定时生成作息日程、时间段动态匹配并在对话中注入实时状态与心情。
-short_desc: 每日自动生成拟人化日程并实时注入对话中
-version: v1.0.0
+desc: 拟人化综合功能集合插件，支持每日定时生成作息日程并在对话中注入实时状态；支持对特定群聊/私聊进行专属提示词定制注入并可从'数据与日志-对话'中一键抓取与配置。
+short_desc: 每日自动生成拟人化日程 + 特定群聊/私聊专属提示词注入
+version: v1.1.0
 author: elegy-snow
 repo: https://github.com/elegy-snow/astrbot_plugin_personated
 support_platforms:

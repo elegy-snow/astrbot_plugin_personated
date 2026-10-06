@@ -1158,6 +1158,240 @@ select.input-control:focus {
 }
 
 /* ==========================================================================
+   UMO Prompt Injector View & Modals
+   ========================================================================== */
+.modal-lg {
+  max-width: 900px !important;
+  width: 94% !important;
+}
+
+.modal-md {
+  max-width: 640px !important;
+  width: 90% !important;
+}
+
+.umo-rules-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.umo-rule-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.umo-rule-card:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+
+.umo-rule-card.disabled {
+  opacity: 0.72;
+  border-left: 4px solid var(--text-muted);
+}
+
+.umo-rule-card.enabled {
+  border-left: 4px solid var(--success);
+}
+
+.rule-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rule-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rule-name-text {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.rule-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tag-chat-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+  font-weight: 600;
+}
+
+.tag-chat-private {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(2, 132, 199, 0.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tag-platform-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tag-id-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.rule-umo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.rule-umo-code {
+  font-family: monospace;
+  color: var(--text-main);
+  user-select: all;
+}
+
+.btn-copy-umo {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--primary);
+  transition: background 0.15s;
+}
+
+.btn-copy-umo:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.rule-prompt-box {
+  background: var(--bg-input);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.rule-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+/* Discover table styling */
+.discover-table-wrap {
+  max-height: 440px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.discover-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.discover-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-input);
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+
+.discover-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.discover-table tr:hover {
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.chat-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-name-title {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.chat-name-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
    Responsive Adaptations
    ========================================================================== */
 @media (max-width: 900px) {

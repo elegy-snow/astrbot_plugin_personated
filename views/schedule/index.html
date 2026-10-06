@@ -35,6 +35,11 @@
             <span class="nav-icon">⚙️</span>
             <span class="nav-label">作息规则与分段</span>
           </li>
+          <li class="nav-item" data-view="view-umo-injector">
+            <span class="nav-icon">💬</span>
+            <span class="nav-label">会话专属提示词</span>
+            <span class="badge badge-primary">新功能</span>
+          </li>
         </ul>
 
         <div class="nav-section-title">综合扩展规划</div>
@@ -335,6 +340,182 @@
           <button class="btn btn-primary btn-lg" id="btn-rules-save-all">💾 保存所有规则配置</button>
         </div>
       </section>
+
+      <!-- VIEW 4: 会话专属提示词注入 (群聊 / 私聊 UMO 注入管理) -->
+      <section class="view-panel" id="view-umo-injector">
+        <div class="panel-header-wrap">
+          <div class="panel-title-group">
+            <h2>会话专属提示词注入 (群聊 / 私聊)</h2>
+            <p class="panel-subtitle">
+              针对特定群聊或私聊会话单独配置个性化提示词。可在右侧点击「从 AstrBot 对话中抓取」直接选取已有会话（群聊展示群名称与群号，私聊展示对话人昵称），并在每次与该会话交流时自动注入定制提示词。
+            </p>
+          </div>
+          <div class="panel-actions-group">
+            <div class="global-switch-badge">
+              <label class="toggle-control" for="umo-global-enabled-toggle">
+                <input type="checkbox" id="umo-global-enabled-toggle" checked />
+                <span class="toggle-track"></span>
+              </label>
+              <span class="switch-label-text">功能总开关</span>
+            </div>
+            <button class="btn btn-secondary" id="btn-discover-umos">
+              🔍 从 AstrBot 对话抓取
+            </button>
+            <button class="btn btn-primary" id="btn-add-umo-rule">
+              ➕ 添加专属规则
+            </button>
+            <button class="btn btn-outline" id="btn-refresh-umo-rules" title="刷新规则列表">
+              🔄 刷新
+            </button>
+          </div>
+        </div>
+
+        <!-- 统计与状态概览条 -->
+        <div class="stats-grid-row" style="margin-bottom: 20px;">
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: rgba(79, 70, 229, 0.1); color: var(--primary);">🏷️</div>
+            <div class="stat-info">
+              <div class="stat-label">已配置会话数</div>
+              <div class="stat-val" id="stat-umo-total-count">0 条</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: rgba(16, 185, 129, 0.1); color: var(--success);">🟢</div>
+            <div class="stat-info">
+              <div class="stat-label">当前生效中</div>
+              <div class="stat-val" id="stat-umo-enabled-count">0 条</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: rgba(2, 132, 199, 0.1); color: var(--accent);">🧩</div>
+            <div class="stat-info">
+              <div class="stat-label">默认注入模式</div>
+              <div class="stat-val" id="stat-umo-default-mode">System Prompt</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 过滤与搜索工具栏 -->
+        <div class="filter-toolbar">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="umo-search-input" class="input-control search-input" placeholder="按群名称、对话人昵称、群号或 UMO 关键词搜索..." />
+          </div>
+          <div class="filter-group">
+            <select id="umo-chat-type-filter" class="select-control">
+              <option value="all">全部类型 (群聊 & 私聊)</option>
+              <option value="group">仅群聊 (Group)</option>
+              <option value="private">仅私聊 (Private)</option>
+            </select>
+            <select id="umo-status-filter" class="select-control">
+              <option value="all">全部状态</option>
+              <option value="enabled">仅看已启用</option>
+              <option value="disabled">仅看已禁用</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 规则卡片容器 -->
+        <div id="umo-rules-list" class="umo-rules-container">
+          <div class="loading-box">正在加载会话专属提示词规则...</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 模态框 1：从 AstrBot '数据与日志-对话' 抓取并选择会话 -->
+    <div class="modal-overlay" id="modal-discover-umos">
+      <div class="modal-content modal-lg">
+        <div class="modal-header">
+          <div>
+            <h3>从 AstrBot 对话中抓取会话</h3>
+            <p class="modal-desc" style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+              已自动从 AstrBot 的「数据与日志 - 对话」及别名表中提取会话记录。群聊将展示【群名称】与【群号】，私聊将展示【对话人昵称】。点击「一键配置」即可为选中会话定制个性化提示词。
+            </p>
+          </div>
+          <button class="modal-close" id="modal-discover-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="filter-toolbar" style="margin-bottom: 14px;">
+            <div class="search-box" style="flex: 1;">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="discover-search-input" class="input-control search-input" placeholder="输入群名称、对话人昵称、群号或 UMO 快速筛选..." />
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-re-discover-umos">🔄 重新抓取</button>
+          </div>
+          <div id="discover-list-container" class="discover-table-wrap">
+            <div class="loading-box">正在抓取 AstrBot 会话数据...</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="modal-discover-cancel">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模态框 2：编辑/添加会话专属提示词规则 -->
+    <div class="modal-overlay" id="modal-umo-rule">
+      <div class="modal-content modal-md">
+        <div class="modal-header">
+          <h3 id="modal-umo-rule-title">编辑会话专属提示词</h3>
+          <button class="modal-close" id="modal-umo-rule-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="modal-rule-umo">
+              会话 UMO 标识 <span class="required" style="color:var(--danger)">*</span>
+              <span class="hint-text">（例如：<code>aiocqhttp:GroupMessage:12345678</code> 或从抓取列表中带入）</span>
+            </label>
+            <input type="text" id="modal-rule-umo" class="input-control" placeholder="格式如：aiocqhttp:GroupMessage:12345678" />
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="modal-rule-name">规则备注 / 群名称 / 昵称</label>
+              <input type="text" id="modal-rule-name" class="input-control" placeholder="如：测试技术交流群 / 朋友私聊" />
+            </div>
+            <div class="form-group">
+              <label for="modal-rule-mode">注入模式</label>
+              <select id="modal-rule-mode" class="select-control">
+                <option value="system_prompt">追加到 System Prompt (推荐)</option>
+                <option value="prepend_system">置于 System Prompt 开头</option>
+                <option value="extra_user_content">作为附加用户消息块 (Extra Content)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="modal-rule-template-select">
+              快捷填入常用提示词预设
+              <span class="hint-text">可选择下方模板快速填充，并在文本框中微调</span>
+            </label>
+            <select id="modal-rule-template-select" class="select-control">
+              <option value="">-- 选择预设模板填入 --</option>
+              <option value="group_assistant">【群聊模式】热情友好的群助理/破冰搭话人设</option>
+              <option value="formal_work">【严肃工作】专业干练、回答简洁精准的工作助理</option>
+              <option value="playful_friend">【幽默损友】轻松幽默、接地气互怼的密友风格</option>
+              <option value="tsundere">【傲娇角色】表面嫌弃但内心关心的专属傲娇人设</option>
+              <option value="custom_context">【群规知识】带有特定群规和专属背景知识前置</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="modal-rule-prompt">
+              个性化专属提示词内容 <span class="required" style="color:var(--danger)">*</span>
+              <span class="hint-text">在此群聊/私聊对话时，每次请求都会自然注入这段提示词</span>
+            </label>
+            <textarea id="modal-rule-prompt" class="textarea-control" rows="6" placeholder="输入该群聊/私聊专用的提示词指令..."></textarea>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+            <input type="checkbox" id="modal-rule-enabled" checked style="width: 18px; height: 18px; cursor: pointer;" />
+            <label for="modal-rule-enabled" style="margin: 0; cursor: pointer; font-weight: 500;">立即启用该专属规则</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="modal-umo-rule-cancel">取消</button>
+          <button class="btn btn-primary" id="modal-umo-rule-save">💾 保存并生效</button>
+        </div>
+      </div>
     </div>
 
     <!-- 弹窗：编辑/添加单个日程事项模态框 -->

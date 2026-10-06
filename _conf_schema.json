@@ -76,5 +76,28 @@
     "type": "text",
     "default": "你正在为一个具体的人格角色规划一天的真实作息与生活日程。\n【角色人设】：\n{persona_prompt}\n\n今天是 {date}（星期{weekday}）。\n请根据该人设性格、日常喜好、职业/身份特点以及生活节奏，为今天指定的各个时间段分别规划具体的活动事件、心理状态/心情以及细节。\n\n今天的时间段安排如下：\n{segments_desc}\n\n【返回规范】：\n请严格返回 JSON 数组格式（不要包含任何 markdown 代码块包裹，也不要有任何其他文字），数组每个元素对应一个时间段，字段包含：\n- id: 时间段ID\n- name: 时间段名称\n- start: 开始时间\n- end: 结束时间\n- activity: 当前具体在做的事情和所处环境（生动拟人化）\n- state: 当前心情、精神状态与心理活动",
     "hint": "生成日程时发给大模型的提示词。支持变量：{persona_prompt}（人设提示词）, {date}（日期）, {weekday}（星期几）, {segments_desc}（时间段列表）。"
+  },
+  "umo_prompt_injector_enabled": {
+    "description": "启用特定群聊/私聊提示词注入",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，可在每次与指定群聊或私聊对话时，自然注入该会话后台配置的个性化专属提示词。"
+  },
+  "umo_prompt_default_mode": {
+    "description": "专属提示词默认注入模式",
+    "type": "string",
+    "default": "system_prompt",
+    "options": [
+      "system_prompt",
+      "extra_user_content",
+      "prepend_system"
+    ],
+    "hint": "system_prompt: 追加到系统提示词末尾；prepend_system: 放在系统提示词最前；extra_user_content: 作为附加用户内容块。"
+  },
+  "umo_prompt_rules": {
+    "description": "特定会话专属提示词规则列表",
+    "type": "list",
+    "default": [],
+    "hint": "各群聊/私聊的专属提示词列表。更推荐在插件 WebUI 可视化面板中直接从'数据与日志-对话'中一键抓取并选择配置。"
   }
 }

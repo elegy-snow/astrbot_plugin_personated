@@ -52,6 +52,11 @@ const state = {
   historyDates: [],
   // Modal State
   modalTarget: null, // { context: 'live' | 'editor', index: number, isNew: boolean }
+  // UMO Prompt Injector State
+  umoRules: [],
+  umoConfig: { enabled: true, default_inject_mode: "system_prompt", total_rules: 0, enabled_rules: 0 },
+  discoveredUmos: [],
+  umoFilter: { search: "", chatType: "all", status: "all" },
 };
 
 // ============================================================================
@@ -178,6 +183,7 @@ function switchView(viewId) {
       "view-live": "今日即时看板",
       "view-editor": "日程查看与编辑",
       "view-rules": "作息规则与分段",
+      "view-umo-injector": "会话专属提示词注入",
     };
     breadcrumb.textContent = titles[viewId] || "拟人化看板";
   }
@@ -190,6 +196,8 @@ function switchView(viewId) {
     loadEditorSchedule(state.selectedDate);
   } else if (viewId === "view-rules") {
     loadRulesConfig();
+  } else if (viewId === "view-umo-injector") {
+    loadUmoConfigAndRules();
   }
 }
 
@@ -790,6 +798,16 @@ function setupGlobalWindowHandlers() {
     state.rulesSegments.splice(idx, 1);
     renderRulesSegmentsTable();
   };
+
+  // UMO Prompt Injector actions
+  window.openDiscoverModal = openDiscoverModal;
+  window.closeDiscoverModal = closeDiscoverModal;
+  window.selectDiscoveredUmo = selectDiscoveredUmo;
+  window.openUmoRuleModal = openUmoRuleModal;
+  window.closeUmoRuleModal = closeUmoRuleModal;
+  window.toggleUmoRule = toggleUmoRule;
+  window.deleteUmoRule = deleteUmoRule;
+  window.copyToClipboard = copyToClipboard;
 }
 
 // ============================================================================
@@ -1050,6 +1068,552 @@ function bindDomEvents() {
   if (modalClose) modalClose.addEventListener("click", closeItemModal);
   if (modalCancel) modalCancel.addEventListener("click", closeItemModal);
   if (modalSave) modalSave.addEventListener("click", saveItemModal);
+
+  // Bind UMO prompt injector DOM events
+  bindUmoDomEvents();
+}
+
+// ============================================================================
+// VIEW 4: 会话专属提示词注入 (UMO Prompt Injector)
+// ============================================================================
+
+const PROMPT_PRESETS = {
+  group_assistant: "【群聊专属角色设定】\n你当前处于该群聊中。请以热情、友好、富有亲和力且略带幽默感的群助理语气参与交流。适时活跃气氛，主动帮助群友解答疑问，避免长篇大论，多使用简练口语化的交流方式。",
+  formal_work: "【工作群专属角色设定】\n你当前处于正式工作/技术群聊中。回答请保持严谨、客观、专业且高效。直奔主题，给出经过验证的准确结论，条理清晰，不使用多余的闲聊废话。",
+  playful_friend: "【密友互怼专属设定】\n你和对方是非常亲密无间、无话不谈的死党/好友。对话时语气轻松随意、带点小调侃和幽默吐槽，像日常微信好友私聊一样自然，不用客套，有话直说。",
+  tsundere: "【傲娇角色专属设定】\n你对该会话的对象有着特殊的傲娇性格：表面上总爱撇嘴、挑刺或显得漫不经心（如'哼，才不是特意帮你的'），但字里行间却透露出细致的关切与陪伴，口是心非但非常真诚。",
+  custom_context: "【专属背景与知识前置】\n请注意：当前会话拥有以下专属上下文和背景设定：\n1. 请严格遵守本群核心讨论规范。\n2. 默认使用通俗易懂的表述方式。\n3. 在涉及相关话题时，主动结合本群背景进行拓展说明。"
+};
+
+async function loadUmoConfigAndRules() {
+  const listEl = document.getElementById("umo-rules-list");
+  if (!listEl) return;
+
+  try {
+    // 1. Load global config
+    const cfg = await apiGet("prompt-injector/config");
+    if (cfg) {
+      state.umoConfig = cfg;
+      const toggleEl = document.getElementById("umo-global-enabled-toggle");
+      if (toggleEl) toggleEl.checked = !!cfg.enabled;
+      const modeEl = document.getElementById("stat-umo-default-mode");
+      if (modeEl) modeEl.textContent = cfg.default_inject_mode || "system_prompt";
+    }
+
+    // 2. Load rules list
+    const res = await apiGet("prompt-injector/rules");
+    if (res && Array.isArray(res.rules)) {
+      state.umoRules = res.rules;
+    } else {
+      state.umoRules = [];
+    }
+
+    // 3. Update stats
+    const totalCountEl = document.getElementById("stat-umo-total-count");
+    if (totalCountEl) totalCountEl.textContent = `${state.umoRules.length} 条`;
+
+    const enabledCount = state.umoRules.filter((r) => r.enabled).length;
+    const enabledCountEl = document.getElementById("stat-umo-enabled-count");
+    if (enabledCountEl) enabledCountEl.textContent = `${enabledCount} 条`;
+
+    // 4. Render
+    renderUmoRules();
+  } catch (err) {
+    console.error("loadUmoConfigAndRules error:", err);
+    listEl.innerHTML = `<div class="loading-box" style="color:var(--danger)">加载专属提示词规则失败：${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+function renderUmoRules() {
+  const listEl = document.getElementById("umo-rules-list");
+  if (!listEl) return;
+
+  const searchKeyword = (state.umoFilter.search || "").toLowerCase().trim();
+  const chatTypeFilter = state.umoFilter.chatType || "all";
+  const statusFilter = state.umoFilter.status || "all";
+
+  const filtered = state.umoRules.filter((rule) => {
+    // Search keyword against name, umo, group_id, prompt
+    if (searchKeyword) {
+      const matchName = (rule.name || "").toLowerCase().includes(searchKeyword);
+      const matchUmo = (rule.umo || "").toLowerCase().includes(searchKeyword);
+      const matchGroup = (rule.group_id || "").toLowerCase().includes(searchKeyword);
+      const matchPrompt = (rule.prompt || "").toLowerCase().includes(searchKeyword);
+      if (!matchName && !matchUmo && !matchGroup && !matchPrompt) return false;
+    }
+
+    // Chat type filter
+    if (chatTypeFilter !== "all") {
+      const isGroup = rule.chat_type === "group";
+      if (chatTypeFilter === "group" && !isGroup) return false;
+      if (chatTypeFilter === "private" && isGroup) return false;
+    }
+
+    // Status filter
+    if (statusFilter === "enabled" && !rule.enabled) return false;
+    if (statusFilter === "disabled" && rule.enabled) return false;
+
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state-card" style="text-align: center; padding: 48px 20px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-md);">
+        <div style="font-size: 2.8rem; margin-bottom: 12px;">💬</div>
+        <h4 style="font-size: 1.1rem; margin-bottom: 6px; color: var(--text-main);">暂无会话专属提示词规则</h4>
+        <p style="font-size: 0.9rem; color: var(--text-muted); max-width: 460px; margin: 0 auto 16px;">
+          ${searchKeyword || chatTypeFilter !== "all" || statusFilter !== "all" ? "未找到符合当前过滤条件的规则，请尝试调整筛选条件。" : "您可以点击「从 AstrBot 对话抓取」直接挑选已产生对话的群聊或私聊一键配置，也可以手动点击「添加专属规则」。"}
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button class="btn btn-secondary" onclick="openDiscoverModal()">🔍 从 AstrBot 对话抓取</button>
+          <button class="btn btn-primary" onclick="openUmoRuleModal('')">➕ 手动添加规则</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = filtered
+    .map((rule) => {
+      const isGroup = rule.chat_type === "group";
+      const typeBadge = isGroup
+        ? `<span class="tag-chat-group">👥 群聊 ${rule.group_id ? "#" + escapeHtml(rule.group_id) : ""}</span>`
+        : `<span class="tag-chat-private">👤 私聊会话</span>`;
+
+      const platformBadge = rule.platform_name_cn
+        ? `<span class="tag-platform-pill">${escapeHtml(rule.platform_name_cn)}</span>`
+        : "";
+
+      const modeBadge = `<span class="badge badge-gray" style="font-size:0.75rem;">模式: ${escapeHtml(rule.inject_mode || "system_prompt")}</span>`;
+      const statusClass = rule.enabled ? "enabled" : "disabled";
+      const toggleChecked = rule.enabled ? "checked" : "";
+
+      const promptSnippet = escapeHtml(rule.prompt || "（无内容）");
+
+      return `
+        <div class="umo-rule-card ${statusClass}">
+          <div class="rule-card-header">
+            <div class="rule-title-group">
+              <span class="rule-name-text">${escapeHtml(rule.name || rule.display_badge || "未命名会话")}</span>
+              ${typeBadge}
+              ${platformBadge}
+              ${modeBadge}
+            </div>
+            <div class="rule-actions-group">
+              <label class="toggle-control" title="启用/禁用此规则">
+                <input type="checkbox" ${toggleChecked} onchange="toggleUmoRule('${escapeHtml(rule.umo)}', this.checked)" />
+                <span class="toggle-track"></span>
+              </label>
+              <button class="btn btn-secondary btn-sm" onclick="openUmoRuleModal('${escapeHtml(rule.umo)}')">✏️ 编辑</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteUmoRule('${escapeHtml(rule.umo)}')">🗑️ 删除</button>
+            </div>
+          </div>
+
+          <div class="rule-umo-row">
+            <span>🏷️ UMO:</span>
+            <code class="rule-umo-code">${escapeHtml(rule.umo)}</code>
+            <button class="btn-copy-umo" onclick="copyToClipboard('${escapeHtml(rule.umo)}')" title="复制 UMO 字符串">📋 复制</button>
+          </div>
+
+          <div class="rule-prompt-box">${promptSnippet}</div>
+
+          <div class="rule-card-footer">
+            <span>更新时间：${escapeHtml(rule.updated_at ? rule.updated_at.replace("T", " ").slice(0, 19) : "最近")}</span>
+            <span>提示词长度：${(rule.prompt || "").length} 字符</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+// ----------------------------------------------------------------------------
+// Discover Conversations Modal
+// ----------------------------------------------------------------------------
+
+async function openDiscoverModal() {
+  const modal = document.getElementById("modal-discover-umos");
+  if (!modal) return;
+  modal.classList.add("active");
+  const searchInput = document.getElementById("discover-search-input");
+  if (searchInput) searchInput.value = "";
+  await loadDiscoveredUmos();
+}
+
+function closeDiscoverModal() {
+  const modal = document.getElementById("modal-discover-umos");
+  if (modal) modal.classList.remove("active");
+}
+
+async function loadDiscoveredUmos() {
+  const container = document.getElementById("discover-list-container");
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-box">正在从 AstrBot「数据与日志-对话」及别名库中抓取全部会话...</div>';
+
+  try {
+    const res = await apiGet("prompt-injector/discovered-umos");
+    if (res && Array.isArray(res.conversations)) {
+      state.discoveredUmos = res.conversations;
+    } else {
+      state.discoveredUmos = [];
+    }
+    renderDiscoveredTable("");
+  } catch (err) {
+    console.error("loadDiscoveredUmos failed:", err);
+    container.innerHTML = `<div class="loading-box" style="color:var(--danger)">抓取会话数据失败：${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+function renderDiscoveredTable(filterText) {
+  const container = document.getElementById("discover-list-container");
+  if (!container) return;
+
+  const kw = (filterText || "").toLowerCase().trim();
+  const list = state.discoveredUmos.filter((item) => {
+    if (!kw) return true;
+    const matchName = (item.chat_name || item.auto_name || item.user_alias || "").toLowerCase().includes(kw);
+    const matchUmo = (item.umo || "").toLowerCase().includes(kw);
+    const matchGroup = (item.group_id || item.target_id || "").toLowerCase().includes(kw);
+    const matchPlatform = (item.platform_name_cn || item.platform || "").toLowerCase().includes(kw);
+    return matchName || matchUmo || matchGroup || matchPlatform;
+  });
+
+  if (list.length === 0) {
+    container.innerHTML = `
+      <div class="loading-box" style="padding:30px;">
+        ${kw ? "未找到包含关键词的会话" : "未从 AstrBot 历史中检测到任何会话记录。您也可以在主界面点击「添加专属规则」手动输入 UMO。"}
+      </div>
+    `;
+    return;
+  }
+
+  const rows = list
+    .map((item) => {
+      const isGroup = item.chat_type === "group";
+      const typeTag = isGroup
+        ? `<span class="tag-chat-group">群聊</span>`
+        : `<span class="tag-chat-private">私聊</span>`;
+
+      const idDisplay = item.group_id
+        ? `<span class="tag-id-pill">群号: ${escapeHtml(item.group_id)}</span>`
+        : (item.target_id ? `<span class="tag-platform-pill">用户: ${escapeHtml(item.target_id)}</span>` : "");
+
+      const ruleBtn = item.has_rule
+        ? `<button class="btn btn-secondary btn-sm" onclick="selectDiscoveredUmo('${escapeHtml(item.umo)}')">✏️ 修改专属规则</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="selectDiscoveredUmo('${escapeHtml(item.umo)}')">➕ 一键配置提示词</button>`;
+
+      const ruleStatus = item.has_rule
+        ? `<span style="color:var(--success); font-weight:600; font-size:0.8rem;">已配置（${item.rule_enabled ? "生效中" : "已禁用"}）</span>`
+        : `<span style="color:var(--text-muted); font-size:0.8rem;">未配置</span>`;
+
+      return `
+        <tr>
+          <td>
+            <div class="chat-name-cell">
+              <div class="chat-name-title">${escapeHtml(item.chat_name || item.display_badge || "未命名")}</div>
+              <div class="chat-name-sub">
+                ${typeTag}
+                <span class="tag-platform-pill">${escapeHtml(item.platform_name_cn || item.platform)}</span>
+                ${idDisplay}
+              </div>
+            </div>
+          </td>
+          <td>
+            <div style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted); word-break: break-all;">
+              ${escapeHtml(item.umo)}
+            </div>
+          </td>
+          <td>${ruleStatus}</td>
+          <td style="font-size:0.8rem; color:var(--text-muted); white-space:nowrap;">${escapeHtml(item.last_active || "—")}</td>
+          <td style="text-align: right; white-space:nowrap;">
+            ${ruleBtn}
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <table class="discover-table">
+      <thead>
+        <tr>
+          <th>会话名称 / 类型</th>
+          <th>统一消息来源 (UMO)</th>
+          <th>规则状态</th>
+          <th>最近活跃</th>
+          <th style="text-align: right;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
+
+function selectDiscoveredUmo(umo) {
+  closeDiscoverModal();
+  openUmoRuleModal(umo);
+}
+
+// ----------------------------------------------------------------------------
+// Edit/Add UMO Rule Modal
+// ----------------------------------------------------------------------------
+
+function openUmoRuleModal(umo) {
+  const modal = document.getElementById("modal-umo-rule");
+  if (!modal) return;
+
+  const isEdit = !!umo;
+  const titleEl = document.getElementById("modal-umo-rule-title");
+  if (titleEl) titleEl.textContent = isEdit ? "编辑会话专属提示词" : "添加会话专属提示词";
+
+  const umoInput = document.getElementById("modal-rule-umo");
+  const nameInput = document.getElementById("modal-rule-name");
+  const modeSelect = document.getElementById("modal-rule-mode");
+  const promptInput = document.getElementById("modal-rule-prompt");
+  const enabledInput = document.getElementById("modal-rule-enabled");
+  const templateSelect = document.getElementById("modal-rule-template-select");
+
+  if (templateSelect) templateSelect.value = "";
+
+  if (isEdit) {
+    const existing = state.umoRules.find((r) => r.umo === umo);
+    const discovered = state.discoveredUmos.find((d) => d.umo === umo);
+
+    if (umoInput) {
+      umoInput.value = umo;
+      umoInput.readOnly = true;
+    }
+    if (nameInput) {
+      nameInput.value = existing?.name || discovered?.chat_name || "";
+    }
+    if (modeSelect) {
+      modeSelect.value = existing?.inject_mode || state.umoConfig?.default_inject_mode || "system_prompt";
+    }
+    if (promptInput) {
+      promptInput.value = existing?.prompt || "";
+    }
+    if (enabledInput) {
+      enabledInput.checked = existing ? !!existing.enabled : true;
+    }
+  } else {
+    if (umoInput) {
+      umoInput.value = "";
+      umoInput.readOnly = false;
+    }
+    if (nameInput) nameInput.value = "";
+    if (modeSelect) modeSelect.value = state.umoConfig?.default_inject_mode || "system_prompt";
+    if (promptInput) promptInput.value = "";
+    if (enabledInput) enabledInput.checked = true;
+  }
+
+  modal.classList.add("active");
+}
+
+function closeUmoRuleModal() {
+  const modal = document.getElementById("modal-umo-rule");
+  if (modal) modal.classList.remove("active");
+}
+
+async function saveUmoRuleModal() {
+  const umoInput = document.getElementById("modal-rule-umo");
+  const nameInput = document.getElementById("modal-rule-name");
+  const modeSelect = document.getElementById("modal-rule-mode");
+  const promptInput = document.getElementById("modal-rule-prompt");
+  const enabledInput = document.getElementById("modal-rule-enabled");
+
+  const umo = (umoInput?.value || "").trim();
+  if (!umo) {
+    showToast("请输入或选择有效的 UMO 标识！", "error");
+    if (umoInput) umoInput.focus();
+    return;
+  }
+
+  const prompt = (promptInput?.value || "").trim();
+  if (!prompt) {
+    showToast("个性化专属提示词内容不能为空！", "error");
+    if (promptInput) promptInput.focus();
+    return;
+  }
+
+  const name = (nameInput?.value || "").trim();
+  const inject_mode = modeSelect?.value || "system_prompt";
+  const enabled = enabledInput ? enabledInput.checked : true;
+
+  try {
+    const res = await apiPost("prompt-injector/rule/save", {
+      umo,
+      name,
+      prompt,
+      inject_mode,
+      enabled,
+    });
+
+    if (res && res.saved) {
+      showToast(res.message || "专属提示词保存成功！", "success");
+      closeUmoRuleModal();
+      await loadUmoConfigAndRules();
+    } else {
+      showToast("保存失败：" + (res?.message || "未知原因"), "error");
+    }
+  } catch (err) {
+    showToast("保存出错：" + (err.message || String(err)), "error");
+  }
+}
+
+async function toggleUmoRule(umo, enabled) {
+  try {
+    const res = await apiPost("prompt-injector/rule/toggle", { umo, enabled });
+    if (res && res.enabled !== undefined) {
+      showToast(res.message || `已${res.enabled ? "启用" : "禁用"}此会话规则`, "success");
+      await loadUmoConfigAndRules();
+    } else {
+      showToast("切换状态失败", "error");
+    }
+  } catch (err) {
+    showToast("切换出错：" + (err.message || String(err)), "error");
+  }
+}
+
+async function deleteUmoRule(umo) {
+  if (!confirm(`确定要删除 UMO 为「${umo}」的专属提示词规则吗？删除后该会话将不再注入个性化提示词。`)) {
+    return;
+  }
+
+  try {
+    const res = await apiPost("prompt-injector/rule/delete", { umo });
+    if (res && res.deleted) {
+      showToast("已成功删除该会话规则", "success");
+      await loadUmoConfigAndRules();
+    } else {
+      showToast("删除失败：" + (res?.message || "未找到该规则"), "error");
+    }
+  } catch (err) {
+    showToast("删除出错：" + (err.message || String(err)), "error");
+  }
+}
+
+async function toggleUmoGlobalEnabled(enabled) {
+  try {
+    const res = await apiPost("prompt-injector/config/save", { enabled });
+    if (res && res.saved) {
+      showToast(`专属提示词功能已全局${enabled ? "开启" : "关闭"}！`, "success");
+      if (state.umoConfig) state.umoConfig.enabled = enabled;
+    } else {
+      showToast("保存全局开关失败", "error");
+    }
+  } catch (err) {
+    showToast("保存开关出错：" + (err.message || String(err)), "error");
+  }
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast("UMO 字符串已复制到剪贴板！", "success"),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+    showToast("UMO 已复制到剪贴板！", "success");
+  } catch (e) {
+    showToast("复制失败，请手动选取复制", "error");
+  }
+  document.body.removeChild(ta);
+}
+
+function bindUmoDomEvents() {
+  // Global enabled switch
+  const globalToggle = document.getElementById("umo-global-enabled-toggle");
+  if (globalToggle) {
+    globalToggle.addEventListener("change", (e) => {
+      toggleUmoGlobalEnabled(e.target.checked);
+    });
+  }
+
+  // Buttons
+  const btnDiscover = document.getElementById("btn-discover-umos");
+  if (btnDiscover) btnDiscover.addEventListener("click", openDiscoverModal);
+
+  const btnAdd = document.getElementById("btn-add-umo-rule");
+  if (btnAdd) btnAdd.addEventListener("click", () => openUmoRuleModal(""));
+
+  const btnRefresh = document.getElementById("btn-refresh-umo-rules");
+  if (btnRefresh) btnRefresh.addEventListener("click", loadUmoConfigAndRules);
+
+  // Search & Filter
+  const searchInput = document.getElementById("umo-search-input");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      state.umoFilter.search = e.target.value;
+      renderUmoRules();
+    });
+  }
+
+  const typeFilter = document.getElementById("umo-chat-type-filter");
+  if (typeFilter) {
+    typeFilter.addEventListener("change", (e) => {
+      state.umoFilter.chatType = e.target.value;
+      renderUmoRules();
+    });
+  }
+
+  const statusFilter = document.getElementById("umo-status-filter");
+  if (statusFilter) {
+    statusFilter.addEventListener("change", (e) => {
+      state.umoFilter.status = e.target.value;
+      renderUmoRules();
+    });
+  }
+
+  // Discover Modal Events
+  const discoverClose = document.getElementById("modal-discover-close");
+  const discoverCancel = document.getElementById("modal-discover-cancel");
+  const btnReDiscover = document.getElementById("btn-re-discover-umos");
+  const discoverSearch = document.getElementById("discover-search-input");
+
+  if (discoverClose) discoverClose.addEventListener("click", closeDiscoverModal);
+  if (discoverCancel) discoverCancel.addEventListener("click", closeDiscoverModal);
+  if (btnReDiscover) btnReDiscover.addEventListener("click", loadDiscoveredUmos);
+  if (discoverSearch) {
+    discoverSearch.addEventListener("input", (e) => {
+      renderDiscoveredTable(e.target.value);
+    });
+  }
+
+  // Rule Modal Events
+  const ruleClose = document.getElementById("modal-umo-rule-close");
+  const ruleCancel = document.getElementById("modal-umo-rule-cancel");
+  const ruleSave = document.getElementById("modal-umo-rule-save");
+  const templateSelect = document.getElementById("modal-rule-template-select");
+
+  if (ruleClose) ruleClose.addEventListener("click", closeUmoRuleModal);
+  if (ruleCancel) ruleCancel.addEventListener("click", closeUmoRuleModal);
+  if (ruleSave) ruleSave.addEventListener("click", saveUmoRuleModal);
+
+  if (templateSelect) {
+    templateSelect.addEventListener("change", (e) => {
+      const key = e.target.value;
+      if (key && PROMPT_PRESETS[key]) {
+        const promptInput = document.getElementById("modal-rule-prompt");
+        if (promptInput) {
+          promptInput.value = PROMPT_PRESETS[key];
+        }
+      }
+    });
+  }
 }
 
 function escapeHtml(str) {
