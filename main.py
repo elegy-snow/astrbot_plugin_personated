@@ -11,9 +11,21 @@ if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.message_components import Comp, MessageChain
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
+
+try:
+    import astrbot.api.message_components as Comp
+except Exception:
+    try:
+        import astrbot.core.message.components as Comp
+    except Exception:
+        Comp = None  # type: ignore
+
+try:
+    from astrbot.core.message.message_event_result import MessageChain
+except Exception:
+    MessageChain = None  # type: ignore
 
 try:
     from astrbot.api import logger
@@ -469,10 +481,17 @@ class PersonatedPlugin(Star):
 
         # Send image and optional caption to chat
         try:
-            msg_chain = [Comp.Image.fromFileSystem(res.image_path)]
-            if caption and caption.strip():
-                msg_chain.insert(0, Comp.Plain(caption.strip() + "\n"))
-            await event.send(MessageChain(msg_chain))
+            if Comp and hasattr(Comp, "Image") and MessageChain:
+                msg_chain = [Comp.Image.fromFileSystem(res.image_path)]
+                if caption and caption.strip() and hasattr(Comp, "Plain"):
+                    msg_chain.insert(0, Comp.Plain(caption.strip() + "\n"))
+                await event.send(MessageChain(msg_chain))
+            else:
+                # Fallback to event result if MessageChain or Comp not available
+                img_res = event.image_result(res.image_path)
+                if caption and caption.strip():
+                    await event.send(event.plain_result(caption.strip()))
+                await event.send(img_res)
             return f"图片已生成并已直接发送给用户。成图路径: {res.image_path}。请根据情境进行简要自然回应。"
         except Exception as e:
             logger.error(f"发送生图结果异常: {e}", exc_info=True)
