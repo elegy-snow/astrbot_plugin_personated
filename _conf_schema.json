@@ -99,5 +99,42 @@
     "type": "list",
     "default": [],
     "hint": "各群聊/私聊的专属提示词列表。更推荐在插件 WebUI 可视化面板中直接从'数据与日志-对话'中一键抓取并选择配置。"
+  },
+  "nai_link_enabled": {
+    "description": "启用 NAI 生图伴侣直连联动",
+    "type": "bool",
+    "default": true,
+    "hint": "主动兼容 astrbot_plugin_nai_image 的「陪伴插件直连模式」，支持在聊天中通过 /nai 指令或 pc_generate_photo 工具调用 NAI 极速生图。"
+  },
+  "nai_prompt_format": {
+    "description": "NAI 联动提示词组织格式",
+    "type": "string",
+    "default": "nai",
+    "options": [
+      "nai",
+      "natural_language",
+      "traditional"
+    ],
+    "hint": "nai: NovelAI 4/4.5 标签语法（{}加权、[]降权、多角色语法，原样提交无需转译）；natural_language: 英文自然语言描述；traditional: 传统短语标签。"
+  },
+  "nai_default_size": {
+    "description": "NAI 生图默认比例/尺寸",
+    "type": "string",
+    "default": "portrait",
+    "options": [
+      "portrait",
+      "square",
+      "landscape",
+      "9:16",
+      "1:1",
+      "16:9"
+    ],
+    "hint": "默认出图比例或尺寸规格（如 portrait 竖图 / square 方图 / landscape 横图）。"
+  },
+  "nai_enable_schedule_scene_link": {
+    "description": "联动当前作息日程情境到生图提示词",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，生成自拍或生活照时会自动提取当前日程时段的活动与心情状态，并将其自然融合进画面提示词中。"
   }
 }

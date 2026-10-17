@@ -11,6 +11,7 @@ if _plugin_dir not in sys.path:
     sys.path.insert(0, _plugin_dir)
 
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.message_components import Comp, MessageChain
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 
@@ -27,12 +28,16 @@ try:
     from .modules.schedule.web_api import ScheduleWebApi
     from .modules.prompt_injector.manager import PromptInjectorManager
     from .modules.prompt_injector.web_api import PromptInjectorWebApi
+    from .modules.nai_bridge.manager import NAIBridgeManager
+    from .modules.nai_bridge.web_api import NAIBridgeWebApi
     from .utils.time_utils import get_current_time_str, get_today_str, get_weekday_cn
 except (ImportError, ValueError):
     from modules.schedule.manager import ScheduleManager
     from modules.schedule.web_api import ScheduleWebApi
     from modules.prompt_injector.manager import PromptInjectorManager
     from modules.prompt_injector.web_api import PromptInjectorWebApi
+    from modules.nai_bridge.manager import NAIBridgeManager
+    from modules.nai_bridge.web_api import NAIBridgeWebApi
     from utils.time_utils import get_current_time_str, get_today_str, get_weekday_cn
 
 if TYPE_CHECKING:
@@ -60,6 +65,13 @@ class PersonatedPlugin(Star):
         self.prompt_injector_mgr = PromptInjectorManager(self.context, self.config, self.logger)
         self.prompt_injector_api = PromptInjectorWebApi(self.prompt_injector_mgr, self.logger)
         self.prompt_injector_api.register_routes(self.context)
+
+        # 3. NAI 生图伴侣直连联动系统
+        self.nai_manager = NAIBridgeManager(
+            self.context, self.config, self.logger, schedule_manager=self.schedule_manager
+        )
+        self.nai_api = NAIBridgeWebApi(self.nai_manager, self.logger)
+        self.nai_api.register_routes(self.context)
 
     async def initialize(self) -> None:
         """插件初始化，加载模块与启动定时任务。"""
@@ -368,3 +380,100 @@ class PersonatedPlugin(Star):
 
         self.prompt_injector_mgr.delete_rule(umo)
         yield event.plain_result(f"✅ 已成功清除当前会话（{rule.name}）的专属提示词。")
+
+    # --------------------------------------------------------------------------
+    # NAI 生图伴侣直连联动指令与 LLM 工具 (pc_generate_photo / /nai)
+    # --------------------------------------------------------------------------
+
+    @filter.command_group("nai", alias={"生图", "画图"})
+    def nai_group(self) -> None:
+        """NAI 生图伴侣直连联动命令组"""
+        pass
+
+    @nai_group.command("status", alias={"状态", "检测"})
+    async def nai_status_cmd(self, event: AstrMessageEvent) -> None:
+        """检查与 astrbot_plugin_nai_image 插件的伴侣直连就绪状态"""
+        status = self.nai_manager.bridge_client.get_status()
+        details = status.get("details", {})
+        active_sched = self.nai_manager.get_active_schedule_scene_hint()
+
+        lines = [
+            "🎨 【NAI 生图伴侣直连状态】",
+            f"• 联动功能开关: {'🟢 开启' if self.nai_manager.config.enabled else '🔴 关闭'}",
+            f"• 插件安装状态: {'✅ 已安装' if status.get('installed') else '❌ 未检测到 (astrbot_plugin_nai_image)'}",
+            f"• 生图能力可用: {'🟢 就绪可用' if status.get('available') else '🟡 不可用 (' + status.get('message', '') + ')'}",
+            f"• 提示词组织模式: {self.nai_manager.config.prompt_format} (NAI 4.5 tag / 自然语言)",
+            f"• 默认画面比例: {self.nai_manager.config.default_size}",
+            f"• 当前联动日程情境: {active_sched or '（当前时段无特定活动）'}",
+        ]
+        if details.get("generation_count") is not None:
+            lines.append(f"• 直连历史出图次数: {details.get('generation_count')} 次")
+
+        lines.append("\n💡 提示：您可以使用 `/nai draw <描述>` 直接测试出图，或在聊天中触发 `pc_generate_photo` 工具。")
+        yield event.plain_result("\n".join(lines))
+
+    @nai_group.command("draw", alias={"生成", "拍照", "自拍"})
+    async def nai_draw_cmd(self, event: AstrMessageEvent, prompt: str) -> None:
+        """使用 NAI 伴侣直连生成图片并发送"""
+        if not prompt or not prompt.strip():
+            yield event.plain_result("请输入要生成的画面提示词或场景描述，如：`/nai draw 1girl, smiling, outdoor`")
+            return
+
+        yield event.plain_result("🎨 正在通过 NAI 伴侣直连通道生成图片，请稍候...")
+
+        session_key = str(getattr(event, "unified_msg_origin", "") or "")
+        res = await self.nai_manager.generate_image(
+            prompt=prompt.strip(),
+            workflow_kind="selfie",
+            session_key=session_key,
+        )
+
+        if not res.success or not res.image_path:
+            yield event.plain_result(f"❌ 生图失败：{res.note or '未知原因'}")
+            return
+
+        # Send image via AstrBot message chain
+        yield event.image_result(res.image_path)
+
+    @filter.llm_tool(name="pc_generate_photo")
+    async def pc_generate_photo(
+        self,
+        event: AstrMessageEvent,
+        prompt: str,
+        kind: str = "selfie",
+        size: str = "",
+        caption: str = "",
+    ) -> str:
+        """主链模型调用生图工具：在用户明确要求画图、自拍、拍照、展示生活或穿搭时生成图片。
+
+        Args:
+            prompt: 画面描述或 NovelAI 英文标签 tags
+            kind: 图片类型，可选 selfie(自拍/人像)、text2img(普通文生图)、sticker(表情包)
+            size: 画面尺寸或宽高比，如 portrait(竖图)、square(方图)、landscape(横图)
+            caption: 随图发送的角色台词或配文
+        """
+        if not self.nai_manager.config.enabled:
+            return "生图失败：NAI 伴侣直连生图已在当前插件配置中关闭。"
+
+        session_key = str(getattr(event, "unified_msg_origin", "") or "")
+        res = await self.nai_manager.generate_image(
+            prompt=prompt,
+            workflow_kind=kind or "selfie",
+            session_key=session_key,
+            size=size,
+            include_schedule_scene=True,
+        )
+
+        if not res.success or not res.image_path:
+            return f"生图失败：{res.note or '生成服务未返回有效图片'}"
+
+        # Send image and optional caption to chat
+        try:
+            msg_chain = [Comp.Image.fromFileSystem(res.image_path)]
+            if caption and caption.strip():
+                msg_chain.insert(0, Comp.Plain(caption.strip() + "\n"))
+            await event.send(MessageChain(msg_chain))
+            return f"图片已生成并已直接发送给用户。成图路径: {res.image_path}。请根据情境进行简要自然回应。"
+        except Exception as e:
+            logger.error(f"发送生图结果异常: {e}", exc_info=True)
+            return f"图片已生成，但在发送到会话时遇到异常: {e}"

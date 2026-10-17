@@ -38,6 +38,10 @@
           <li class="nav-item" data-view="view-umo-injector">
             <span class="nav-icon">💬</span>
             <span class="nav-label">会话专属提示词</span>
+          </li>
+          <li class="nav-item" data-view="view-nai-bridge">
+            <span class="nav-icon">🎨</span>
+            <span class="nav-label">NAI 生图伴侣联动</span>
             <span class="badge badge-primary">新功能</span>
           </li>
         </ul>
@@ -418,6 +422,156 @@
         <!-- 规则卡片容器 -->
         <div id="umo-rules-list" class="umo-rules-container">
           <div class="loading-box">正在加载会话专属提示词规则...</div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: NAI 生图伴侣联动面板 -->
+      <section id="view-nai-bridge" class="view-panel">
+        <div class="rules-header">
+          <div>
+            <h2>🎨 NAI 生图伴侣直连联动 (NovelAI 4.5)</h2>
+            <p class="section-desc">
+              主动兼容 <code>astrbot_plugin_nai_image</code> 的「陪伴插件直连模式」，无需通过本地代理，直接在进程内调度 NAI 极速生图，并可深度联动拟人化日程时段情境。
+            </p>
+          </div>
+          <div class="rules-actions">
+            <button class="btn btn-outline" id="btn-refresh-nai-status" title="刷新联动就绪状态">
+              🔄 刷新状态
+            </button>
+            <button class="btn btn-primary" id="btn-save-nai-config">
+              💾 保存联动配置
+            </button>
+          </div>
+        </div>
+
+        <!-- 联动状态卡片 -->
+        <div class="stats-grid-row" style="margin-bottom: 20px;">
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: rgba(99, 102, 241, 0.1); color: var(--primary);">🔌</div>
+            <div class="stat-info">
+              <div class="stat-label">NAI 插件状态</div>
+              <div class="stat-val" id="stat-nai-installed">检测中...</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: rgba(16, 185, 129, 0.1); color: var(--success);">⚡</div>
+            <div class="stat-info">
+              <div class="stat-label">生图链路就绪</div>
+              <div class="stat-val" id="stat-nai-available">检测中...</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-wrap" style="background: rgba(2, 132, 199, 0.1); color: var(--accent);">🧩</div>
+            <div class="stat-info">
+              <div class="stat-label">提示词表达规范</div>
+              <div class="stat-val" id="stat-nai-prompt-mode">NAI 4.5 标签</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 主设置网格 -->
+        <div class="rules-layout-grid">
+          <!-- 左侧配置表单 -->
+          <div class="card" style="padding: 22px;">
+            <h3 style="margin-bottom: 16px; font-size: 1.08rem; font-weight: 700; color: var(--text-main);">⚙️ 联动行为与默认参数</h3>
+
+            <div class="form-group" style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px dashed var(--border);">
+              <div>
+                <label for="nai-cfg-enabled" style="margin: 0; font-size: 0.92rem; font-weight: 600; cursor: pointer;">启用 NAI 伴侣直连生图</label>
+                <span class="hint-text">关闭后将暂停主链工具与快捷指令的生图调用</span>
+              </div>
+              <label class="toggle-control">
+                <input type="checkbox" id="nai-cfg-enabled" checked />
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label for="nai-cfg-prompt-format">
+                生图提示词组织方式 (Prompt Format)
+                <span class="hint-text">推荐保持「NAI 联动模式」，由大模型直接按 NovelAI 4/4.5 标签规范书写</span>
+              </label>
+              <select id="nai-cfg-prompt-format" class="select-control">
+                <option value="nai">NAI 联动模式（NovelAI 4/4.5 标签语法，原样提交无需转译）</option>
+                <option value="natural_language">自然语言描述（连贯英文句子，适合自然语言模式）</option>
+                <option value="traditional">传统文生图（Positive/Negative prompt 短语标签）</option>
+              </select>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="nai-cfg-default-size">默认画面比例 / 尺寸</label>
+                <select id="nai-cfg-default-size" class="select-control">
+                  <option value="portrait">竖图 (Portrait 832x1216 / 9:16)</option>
+                  <option value="square">方图 (Square 1024x1024 / 1:1)</option>
+                  <option value="landscape">横图 (Landscape 1216x832 / 16:9)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="nai-cfg-default-style">画面预设风格（可选）</label>
+                <input type="text" id="nai-cfg-default-style" class="input-control" placeholder="留空使用 NAI 插件默认风格" />
+              </div>
+            </div>
+
+            <div class="form-group" style="display: flex; flex-direction: row; align-items: center; gap: 8px; margin-top: 6px;">
+              <input type="checkbox" id="nai-cfg-schedule-link" checked style="width: 17px; height: 17px; cursor: pointer; accent-color: var(--primary);" />
+              <div>
+                <label for="nai-cfg-schedule-link" style="margin: 0; font-weight: 600; font-size: 0.88rem; cursor: pointer;">联动拟人化日程情境到生图提示词</label>
+                <span class="hint-text" id="nai-current-scene-hint">当前时段活动检测中...</span>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 14px;">
+              <label for="nai-cfg-fixed-positive">常驻固定正面特征标签 (Fixed Positive Prompt)</label>
+              <textarea id="nai-cfg-fixed-positive" class="textarea-control" rows="2" placeholder="如：1girl, solo, blue eyes, long hair, masterpiece（会自动叠加到每次出图前置）"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="nai-cfg-fixed-negative">常驻固定负面词 (Fixed Negative Prompt)</label>
+              <textarea id="nai-cfg-fixed-negative" class="textarea-control" rows="2" placeholder="如：lowres, bad anatomy, bad hands, text, error, missing fingers"></textarea>
+            </div>
+          </div>
+
+          <!-- 右侧即时试跑与调试面板 -->
+          <div class="card" style="padding: 22px; display: flex; flex-direction: column;">
+            <h3 style="margin-bottom: 14px; font-size: 1.08rem; font-weight: 700; color: var(--text-main);">🧪 直连测试出图 (Test Bench)</h3>
+            <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 12px;">
+              可在此输入一段画面描述或 NAI 标签，立即体验进程内直连出图效果。
+            </p>
+
+            <div class="form-group">
+              <label for="nai-test-prompt">测试画面提示词 (Prompt)</label>
+              <textarea id="nai-test-prompt" class="textarea-control" rows="3" placeholder="例如：1girl, smiling, cafe, drinking coffee, soft sunlight, {masterpiece}"></textarea>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="nai-test-kind">意图类型 (Kind)</label>
+                <select id="nai-test-kind" class="select-control">
+                  <option value="selfie">selfie (角色自拍/人像，融合日程)</option>
+                  <option value="text2img">text2img (普通场景文生图)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="nai-test-size">出图比例</label>
+                <select id="nai-test-size" class="select-control">
+                  <option value="portrait">竖图 (Portrait)</option>
+                  <option value="square">方图 (Square)</option>
+                  <option value="landscape">横图 (Landscape)</option>
+                </select>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" id="btn-run-nai-test" style="margin-top: 8px;">
+              🚀 立即发起测试出图
+            </button>
+
+            <!-- 出图结果预览区 -->
+            <div id="nai-test-result-box" style="margin-top: 16px; flex: 1; min-height: 180px; border: 1px dashed var(--border); border-radius: var(--radius-md); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px; text-align: center; background: var(--bg-input);">
+              <span style="font-size: 2.2rem; color: var(--text-muted);">🖼️</span>
+              <span style="font-size: 0.86rem; color: var(--text-muted); margin-top: 6px;" id="nai-result-hint">测试出图结果将在此实时呈现</span>
+            </div>
+          </div>
         </div>
       </section>
     </div>

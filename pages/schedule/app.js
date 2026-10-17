@@ -184,6 +184,7 @@ function switchView(viewId) {
       "view-editor": "日程查看与编辑",
       "view-rules": "作息规则与分段",
       "view-umo-injector": "会话专属提示词注入",
+      "view-nai-bridge": "NAI 生图伴侣联动",
     };
     breadcrumb.textContent = titles[viewId] || "拟人化看板";
   }
@@ -198,6 +199,8 @@ function switchView(viewId) {
     loadRulesConfig();
   } else if (viewId === "view-umo-injector") {
     loadUmoConfigAndRules();
+  } else if (viewId === "view-nai-bridge") {
+    loadNaiBridgeData();
   }
 }
 
@@ -835,6 +838,8 @@ function bindDomEvents() {
         loadRulesConfig();
       } else if (state.activeView === "view-umo-injector") {
         loadUmoConfigAndRules();
+      } else if (state.activeView === "view-nai-bridge") {
+        loadNaiBridgeData();
       }
     });
   }
@@ -1073,6 +1078,9 @@ function bindDomEvents() {
 
   // Bind UMO prompt injector DOM events
   bindUmoDomEvents();
+
+  // Bind NAI bridge DOM events
+  bindNaiBridgeDomEvents();
 }
 
 // ============================================================================
@@ -1743,6 +1751,196 @@ async function init() {
 
   // Default load: Live board
   loadTodayLive();
+}
+
+// ============================================================================
+// VIEW 5: NAI 生图伴侣联动面板 (NAI Bridge View)
+// ============================================================================
+
+async function loadNaiBridgeData() {
+  const statInstalled = document.getElementById("stat-nai-installed");
+  const statAvailable = document.getElementById("stat-nai-available");
+  const statPromptMode = document.getElementById("stat-nai-prompt-mode");
+  const sceneHintEl = document.getElementById("nai-current-scene-hint");
+
+  if (statInstalled) statInstalled.textContent = "检测中...";
+  if (statAvailable) statAvailable.textContent = "检测中...";
+
+  try {
+    const res = await apiGet("nai-bridge/status");
+    if (!res) return;
+
+    const status = res.status || {};
+    const config = res.config || {};
+    const currentScene = res.current_schedule_scene || "";
+
+    // 1. Update stats
+    if (statInstalled) {
+      statInstalled.innerHTML = status.installed
+        ? '<span style="color:var(--success)">已安装</span>'
+        : '<span style="color:var(--danger)">未安装</span>';
+    }
+
+    if (statAvailable) {
+      statAvailable.innerHTML = status.available
+        ? '<span style="color:var(--success)">就绪可用</span>'
+        : `<span style="color:var(--warning)" title="${escapeHtml(status.message || '')}">不可用 (${escapeHtml(status.reason || '未就绪')})</span>`;
+    }
+
+    if (statPromptMode) {
+      const modeNames = {
+        nai: "NAI 4.5 标签",
+        natural_language: "自然语言描述",
+        traditional: "传统短语标签",
+      };
+      statPromptMode.textContent = modeNames[config.prompt_format] || config.prompt_format;
+    }
+
+    if (sceneHintEl) {
+      sceneHintEl.textContent = currentScene
+        ? `当前提取时段情境: ${currentScene}`
+        : "当前日程时段无特殊活动描述";
+    }
+
+    // 2. Populate form
+    const cfgEnabled = document.getElementById("nai-cfg-enabled");
+    const cfgPromptFormat = document.getElementById("nai-cfg-prompt-format");
+    const cfgDefaultSize = document.getElementById("nai-cfg-default-size");
+    const cfgDefaultStyle = document.getElementById("nai-cfg-default-style");
+    const cfgScheduleLink = document.getElementById("nai-cfg-schedule-link");
+    const cfgFixedPositive = document.getElementById("nai-cfg-fixed-positive");
+    const cfgFixedNegative = document.getElementById("nai-cfg-fixed-negative");
+
+    if (cfgEnabled) cfgEnabled.checked = !!config.enabled;
+    if (cfgPromptFormat) cfgPromptFormat.value = config.prompt_format || "nai";
+    if (cfgDefaultSize) cfgDefaultSize.value = config.default_size || "portrait";
+    if (cfgDefaultStyle) cfgDefaultStyle.value = config.default_style || "";
+    if (cfgScheduleLink) cfgScheduleLink.checked = config.enable_schedule_scene_link !== false;
+    if (cfgFixedPositive) cfgFixedPositive.value = config.fixed_positive_prompt || "";
+    if (cfgFixedNegative) cfgFixedNegative.value = config.fixed_negative_prompt || "";
+
+  } catch (err) {
+    console.error("loadNaiBridgeData failed:", err);
+    showToast("获取 NAI 联动状态异常：" + (err.message || String(err)), "error");
+  }
+}
+
+async function saveNaiBridgeConfig() {
+  const cfgEnabled = document.getElementById("nai-cfg-enabled")?.checked ?? true;
+  const cfgPromptFormat = document.getElementById("nai-cfg-prompt-format")?.value || "nai";
+  const cfgDefaultSize = document.getElementById("nai-cfg-default-size")?.value || "portrait";
+  const cfgDefaultStyle = document.getElementById("nai-cfg-default-style")?.value.trim() || "";
+  const cfgScheduleLink = document.getElementById("nai-cfg-schedule-link")?.checked ?? true;
+  const cfgFixedPositive = document.getElementById("nai-cfg-fixed-positive")?.value.trim() || "";
+  const cfgFixedNegative = document.getElementById("nai-cfg-fixed-negative")?.value.trim() || "";
+
+  showToast("正在保存 NAI 联动配置...", "info");
+
+  try {
+    const payload = {
+      enabled: cfgEnabled,
+      prompt_format: cfgPromptFormat,
+      default_size: cfgDefaultSize,
+      default_style: cfgDefaultStyle,
+      enable_schedule_scene_link: cfgScheduleLink,
+      fixed_positive_prompt: cfgFixedPositive,
+      fixed_negative_prompt: cfgFixedNegative,
+    };
+
+    const res = await apiPost("nai-bridge/config/save", payload);
+    if (res && res.saved) {
+      showToast(res.message || "NAI 联动配置已保存生效！", "success");
+      loadNaiBridgeData();
+    } else {
+      showToast("保存失败：" + (res?.message || "未知原因"), "error");
+    }
+  } catch (err) {
+    showToast("保存异常：" + (err.message || String(err)), "error");
+  }
+}
+
+async function runNaiTestGenerate() {
+  const promptInput = document.getElementById("nai-test-prompt");
+  const kindSelect = document.getElementById("nai-test-kind");
+  const sizeSelect = document.getElementById("nai-test-size");
+  const resultBox = document.getElementById("nai-test-result-box");
+  const resultHint = document.getElementById("nai-result-hint");
+
+  const prompt = (promptInput?.value || "").trim();
+  if (!prompt) {
+    showToast("请输入测试画面的描述或 tags！", "error");
+    if (promptInput) promptInput.focus();
+    return;
+  }
+
+  const kind = kindSelect?.value || "selfie";
+  const size = sizeSelect?.value || "portrait";
+
+  if (resultBox) {
+    resultBox.innerHTML = `
+      <div class="loading-box" style="padding: 24px;">
+        <div style="font-size: 2rem; margin-bottom: 8px;">⏳</div>
+        <div>正在通过 NAI 伴侣直连通道出图中，请稍候（通常 3-8 秒）...</div>
+      </div>
+    `;
+  }
+
+  showToast("正在发起 NAI 伴侣直连生图测试...", "info");
+
+  try {
+    const res = await apiPost("nai-bridge/test-generate", {
+      prompt,
+      workflow_kind: kind,
+      size,
+      include_schedule: true,
+    });
+
+    if (res && res.success && res.image_path) {
+      showToast("🎉 NAI 测试出图成功！", "success");
+      if (resultBox) {
+        resultBox.innerHTML = `
+          <div style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <div style="font-size: 0.84rem; color: var(--success); font-weight: 600;">✅ 出图成功 (${escapeHtml(res.backend || 'NAI')})</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); word-break: break-all;">本地路径: <code>${escapeHtml(res.image_path)}</code></div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">状态备注: ${escapeHtml(res.note || '生成完成')}</div>
+          </div>
+        `;
+      }
+    } else {
+      const errNote = res?.note || "未知生成错误";
+      showToast("出图未成功：" + errNote, "error");
+      if (resultBox) {
+        resultBox.innerHTML = `
+          <div style="color: var(--danger); font-size: 0.88rem; padding: 16px;">
+            ❌ 生图未成功：${escapeHtml(errNote)}
+          </div>
+        `;
+      }
+    }
+  } catch (err) {
+    showToast("发起生图异常：" + (err.message || String(err)), "error");
+    if (resultBox) {
+      resultBox.innerHTML = `
+        <div style="color: var(--danger); font-size: 0.88rem; padding: 16px;">
+          ❌ 请求异常：${escapeHtml(err.message || String(err))}
+        </div>
+      `;
+    }
+  }
+}
+
+function bindNaiBridgeDomEvents() {
+  const btnRefresh = document.getElementById("btn-refresh-nai-status");
+  if (btnRefresh) btnRefresh.addEventListener("click", () => {
+    showToast("正在刷新 NAI 联动就绪状态...", "info");
+    loadNaiBridgeData();
+  });
+
+  const btnSave = document.getElementById("btn-save-nai-config");
+  if (btnSave) btnSave.addEventListener("click", saveNaiBridgeConfig);
+
+  const btnRunTest = document.getElementById("btn-run-nai-test");
+  if (btnRunTest) btnRunTest.addEventListener("click", runNaiTestGenerate);
 }
 
 // Start on DOMContentLoaded
