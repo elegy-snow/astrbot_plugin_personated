@@ -688,7 +688,15 @@ async function saveItemModal() {
 function setupGlobalWindowHandlers() {
   // Live actions
   window._triggerLiveRegenerate = async () => {
-    if (!confirm("确定要重新生成今日日程吗？这将覆盖今日现有的作息规划。")) return;
+    let confirmed = true;
+    try {
+      confirmed = window.confirm("确定要重新生成今日日程吗？这将覆盖今日现有的作息规划。");
+    } catch (e) {
+      // In sandboxed iframe without allow-modals, confirm() throws SecurityError or fails silently
+      confirmed = true;
+    }
+    if (!confirmed) return;
+
     showToast("正在请求大模型生成今日作息，请稍候...", "info");
     try {
       const res = await apiPost("schedule/generate");
@@ -758,7 +766,13 @@ function setupGlobalWindowHandlers() {
 
   window._triggerEditorRegenerate = async () => {
     const targetDate = state.selectedDate;
-    if (!confirm(`确定要为日期【${targetDate}】重新生成作息日程吗？`)) return;
+    let confirmed = true;
+    try {
+      confirmed = window.confirm(`确定要为日期【${targetDate}】重新生成作息日程吗？`);
+    } catch (e) {
+      confirmed = true;
+    }
+    if (!confirmed) return;
 
     showToast(`正在生成 ${targetDate} 的作息安排...`, "info");
     try {
@@ -953,7 +967,13 @@ function bindDomEvents() {
   if (btnEditorDeleteDay) {
     btnEditorDeleteDay.addEventListener("click", async () => {
       const d = state.selectedDate;
-      if (!confirm(`确定要彻底删除日期【${d}】的全部日程记录吗？此操作无法撤销。`)) return;
+      let confirmed = true;
+      try {
+        confirmed = window.confirm(`确定要彻底删除日期【${d}】的全部日程记录吗？此操作无法撤销。`);
+      } catch (e) {
+        confirmed = true;
+      }
+      if (!confirmed) return;
 
       try {
         const res = await apiPost("schedule/delete-date", { date: d });
@@ -1001,7 +1021,13 @@ function bindDomEvents() {
   const btnRulesResetPreset = document.getElementById("btn-rules-reset-preset");
   if (btnRulesResetPreset) {
     btnRulesResetPreset.addEventListener("click", () => {
-      if (!confirm("确定要恢复默认预设的 6 个时间段吗？")) return;
+      let confirmed = true;
+      try {
+        confirmed = window.confirm("确定要恢复默认预设的 6 个时间段吗？");
+      } catch (e) {
+        confirmed = true;
+      }
+      if (!confirmed) return;
       state.rulesSegments = JSON.parse(JSON.stringify(DEFAULT_SEGMENTS_PRESET));
       renderRulesSegmentsTable();
       showToast("已恢复默认时间段预设，请记得点击下方保存。", "info");
