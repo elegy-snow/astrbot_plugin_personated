@@ -459,10 +459,10 @@ class PersonatedPlugin(Star):
         """主链模型调用生图工具：在用户明确要求画图、自拍、拍照、展示生活或穿搭时生成图片。
 
         Args:
-            prompt: 画面描述或 NovelAI 英文标签 tags
-            kind: 图片类型，可选 selfie(自拍/人像)、text2img(普通文生图)、sticker(表情包)
-            size: 画面尺寸或宽高比，如 portrait(竖图)、square(方图)、landscape(横图)
-            caption: 随图发送的角色台词或配文
+            prompt(string): 画面描述或 NovelAI 英文标签 tags
+            kind(string): 图片类型，可选 selfie(自拍/人像)、text2img(普通文生图)、sticker(表情包)
+            size(string): 画面尺寸或宽高比，如 portrait(竖图)、square(方图)、landscape(横图)
+            caption(string): 随图发送的角色台词或配文
         """
         if not self.nai_manager.config.enabled:
             return "生图失败：NAI 伴侣直连生图已在当前插件配置中关闭。"
