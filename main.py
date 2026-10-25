@@ -5,11 +5,6 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-# Ensure the plugin directory is in sys.path for robust resolution in all loader modes
-_plugin_dir = str(Path(__file__).resolve().parent)
-if _plugin_dir not in sys.path:
-    sys.path.insert(0, _plugin_dir)
-
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
@@ -35,6 +30,9 @@ except Exception:
 
 LOG_TAG = "[拟人化日程]"
 
+# Name of the LLM function tool that bridges to astrbot_plugin_nai_image.
+NAI_LLM_TOOL_NAME = "pc_generate_photo"
+
 try:
     from .modules.schedule.manager import ScheduleManager
     from .modules.schedule.web_api import ScheduleWebApi
@@ -44,6 +42,13 @@ try:
     from .modules.nai_bridge.web_api import NAIBridgeWebApi
     from .utils.time_utils import get_current_time_str, get_today_str, get_weekday_cn
 except (ImportError, ValueError):
+    # Only expose the plugin directory on sys.path when this module is executed
+    # outside of a package (e.g. local debugging). Doing it unconditionally would
+    # shadow other plugins' top-level modules such as ``utils`` / ``modules``.
+    _plugin_dir = str(Path(__file__).resolve().parent)
+    if _plugin_dir not in sys.path:
+        sys.path.insert(0, _plugin_dir)
+
     from modules.schedule.manager import ScheduleManager
     from modules.schedule.web_api import ScheduleWebApi
     from modules.prompt_injector.manager import PromptInjectorManager
@@ -85,18 +90,93 @@ class PersonatedPlugin(Star):
         self.nai_api = NAIBridgeWebApi(self.nai_manager, self.logger)
         self.nai_api.register_routes(self.context)
 
+        self._nai_tool_ready = False
+
     async def initialize(self) -> None:
-        """插件初始化，加载模块与启动定时任务。"""
+        """插件初始化，加载模块与启动定时任务。
+
+        Each subsystem is started inside its own guard so that a single failing
+        subsystem can never abort plugin loading. When ``initialize()`` raises,
+        AstrBot unloads the plugin and drops every handler **and LLM tool**
+        registered by it, which silently removes ``pc_generate_photo`` from the
+        tool list.
+        """
         logger.info(f"{LOG_TAG} 正在启动拟人化日程后台服务与调度器...")
-        await self.schedule_manager.initialize()
-        await self.prompt_injector_mgr.initialize()
+        try:
+            await self.schedule_manager.initialize()
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 日程后台服务启动失败: {e}", exc_info=True)
+
+        try:
+            await self.prompt_injector_mgr.initialize()
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 会话提示词服务启动失败: {e}", exc_info=True)
+
+        await self._ensure_nai_llm_tool_active()
         logger.info(f"{LOG_TAG} 插件服务初始化完成，当前处于就绪状态。")
+
+    async def _ensure_nai_llm_tool_active(self) -> None:
+        """Verify and repair the registration state of the NAI LLM tool.
+
+        AstrBot binds plugin tools to their owning plugin module during plugin
+        loading and may leave the tool deactivated afterwards (for example when
+        the tool name is still recorded in the persisted ``inactivated_llm_tools``
+        list, or when the recorded ``handler_module_path`` uses a different path
+        format than the plugin module path). This method inspects the live tool
+        manager and repairs both cases so the model can always see the tool.
+        """
+        plugin_module_path = type(self).__module__
+        try:
+            tool_mgr = self.context.get_llm_tool_manager()
+            tool = (
+                tool_mgr.get_func(NAI_LLM_TOOL_NAME)
+                if tool_mgr is not None and hasattr(tool_mgr, "get_func")
+                else None
+            )
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 获取 LLM 工具管理器失败: {e}")
+            return
+
+        if tool is None:
+            logger.error(
+                f"{LOG_TAG} 未找到 LLM 工具 {NAI_LLM_TOOL_NAME}，"
+                "该工具未注册到 AstrBot，生图联动将只能通过 /nai 指令使用。"
+            )
+            return
+
+        if not getattr(tool, "handler_module_path", None):
+            tool.handler_module_path = plugin_module_path
+            logger.warning(
+                f"{LOG_TAG} LLM 工具 {NAI_LLM_TOOL_NAME} 缺少插件归属信息，已修正为 {plugin_module_path}"
+            )
+
+        if not getattr(tool, "active", True):
+            try:
+                activated = await self.context.activate_llm_tool_async(NAI_LLM_TOOL_NAME)
+                if not activated:
+                    tool.active = True
+            except Exception as e:
+                logger.warning(f"{LOG_TAG} 激活 LLM 工具异常，已强制置为激活: {e}")
+                tool.active = True
+            logger.info(f"{LOG_TAG} LLM 工具 {NAI_LLM_TOOL_NAME} 此前处于停用状态，已自动重新激活。")
+
+        self._nai_tool_ready = True
+        logger.info(
+            f"{LOG_TAG} LLM 工具 {NAI_LLM_TOOL_NAME} 已就绪 "
+            f"(归属: {tool.handler_module_path}, 激活: {getattr(tool, 'active', True)})"
+        )
 
     async def terminate(self) -> None:
         """插件卸载/重载清理。"""
         logger.info(f"{LOG_TAG} 正在卸载插件并停止后台定时任务...")
-        await self.schedule_manager.terminate()
-        await self.prompt_injector_mgr.terminate()
+        try:
+            await self.schedule_manager.terminate()
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 停止日程后台任务异常: {e}")
+        try:
+            await self.prompt_injector_mgr.terminate()
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 停止提示词服务异常: {e}")
         logger.info(f"{LOG_TAG} 插件已安全卸载。")
 
     # --------------------------------------------------------------------------
@@ -117,6 +197,34 @@ class PersonatedPlugin(Star):
             await self.prompt_injector_mgr.inject_prompt_context(event, req)
         except Exception as e:
             logger.error(f"[拟人化提示词] 注入会话专属提示词异常: {e}", exc_info=True)
+
+        # 3. 明确指引模型优先使用本插件的伴侣联动生图工具
+        self._apply_nai_tool_preference(req)
+
+    def _apply_nai_tool_preference(self, req: ProviderRequest) -> None:
+        """Steer the model towards this plugin's companion-linked image tool.
+
+        Other image plugins register their own generation tools, and the model
+        otherwise tends to pick those. A short, static directive makes it prefer
+        ``pc_generate_photo``, which fuses the character's live schedule context
+        into the prompt.
+
+        Args:
+            req: The provider request about to be sent to the model.
+        """
+        if not self._nai_tool_ready:
+            return
+        if not getattr(self.nai_manager.config, "enabled", False):
+            return
+        try:
+            req.system_prompt = (req.system_prompt or "") + (
+                "\n\n[生图工具选择规则]\n"
+                f"当用户要求你自拍、拍照、展示当下生活/穿搭/所处场景时，"
+                f"必须调用 {NAI_LLM_TOOL_NAME} 工具来出图，不要使用其他插件提供的生图工具。"
+                "该工具会自动结合你当前时间段的作息活动与心情状态生成画面，更贴合此刻的人设处境。"
+            )
+        except Exception as e:
+            logger.warning(f"{LOG_TAG} 注入生图工具选择提示异常: {e}")
 
     # --------------------------------------------------------------------------
     # 指令组：日程管理交互
@@ -456,7 +564,7 @@ class PersonatedPlugin(Star):
         size: str = "",
         caption: str = "",
     ) -> str:
-        """主链模型调用生图工具：在用户明确要求画图、自拍、拍照、展示生活或穿搭时生成图片。
+        """角色自拍/拍照专用生图工具：当用户要求自拍、拍照、看照片、展示当下生活或穿搭时，优先调用本工具。
 
         Args:
             prompt(string): 画面描述或 NovelAI 英文标签 tags

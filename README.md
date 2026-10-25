@@ -3,6 +3,7 @@
 一个为 AstrBot 设计的高可扩展“功能集合”插件。
 - 模块一：**拟人化作息日程系统**，让机器人拥有真实生活作息与实时状态流转；
 - 模块二：**特定群聊/私聊专属提示词注入系统**，支持为每个群聊/私聊单独配置专属提示词，在对话时每次注入，聊天窗口支持指令配置，WebUI 支持从“数据与日志-对话”中一键抓取并选择（展示群名称与群号/私聊人昵称）。
+- 模块三：**NAI 生图伴侣联动系统**，主动兼容 `astrbot_plugin_nai_image` 的「陪伴插件联动模式」，把当前作息情境融合进自拍/生活照的生图提示词。
 
 ---
 
@@ -93,6 +94,15 @@
    - **从 AstrBot 对话中一键抓取**：弹窗自动抓取「数据与日志-对话」记录，群聊展示【群名称】与【群号】，私聊展示【对话人昵称】，支持关键词实时筛选与一键配置。
    - **多注入模式与模板预设**：可自由调整注入模式，并支持一键套用群聊助手、严肃工作、傲娇人设等常用预设。
    - **独立启用开关与全局总开关**：支持单规则即时开关与全局总开关。
+5. **NAI 生图伴侣联动 (NAI Companion Bridge)**：
+   - 进程内直连 `astrbot_plugin_nai_image` 的 `generate_for_companion()` 契约，无需本地代理端口。
+   - 自动把当前时段的活动与心情状态融合进自拍/生活照提示词，让出图贴合角色此刻处境。
+   - 对外提供 `/nai status`、`/nai draw <描述>` 指令，以及 LLM 工具 `pc_generate_photo`。
+
+> [!NOTE]
+> 插件启动时会自检 `pc_generate_photo` 是否已注册并处于激活状态（部分 AstrBot 版本在插件重载后会把插件工具置为停用），
+> 若被停用会自动重新激活，并在日志中输出 `LLM 工具 pc_generate_photo 已就绪 (归属: ..., 激活: True)`。
+> 若日志中出现 `未找到 LLM 工具 pc_generate_photo`，说明插件本体未成功加载，请检查插件是否处于启用状态并重启 AstrBot。
 
 ---
 
@@ -113,10 +123,17 @@ astrbot_plugin_personated/
 │   │   ├── prompt.py         # 提示词构建与 LLM 响应解析
 │   │   ├── web_api.py        # 视图专属 Web API 后端路由
 │   │   └── __init__.py
-│   └── prompt_injector/      # 会话专属提示词模块
+│   ├── prompt_injector/      # 会话专属提示词模块
 │       ├── manager.py        # 提示词管理器（规则CRUD、持久化、会话抓取、注入）
 │       ├── model.py          # UmoPromptRule 模型与 UMO 解析器
 │       ├── web_api.py        # 提示词管理 Web API
+│       └── __init__.py
+│   └── nai_bridge/           # NAI 生图伴侣联动模块
+│       ├── bridge.py         # 进程内 Extension API 发现与调用
+│       ├── manager.py        # 联动配置、作息情境融合与出图编排
+│       ├── model.py          # 配置与结果数据结构
+│       ├── prompt_format.py  # NAI 4.5 标签 / 自然语言 / 传统短语格式化
+│       ├── web_api.py        # 联动状态、配置与测试出图 Web API
 │       └── __init__.py
 ├── utils/                    # 通用工具函数
 │   └── time_utils.py         # 24小时制时间解析、跨夜判断与倒计时

@@ -2,7 +2,7 @@ name: astrbot_plugin_personated
 display_name: 拟人化综合伴侣
 desc: 拟人化综合功能集合插件，支持每日定时生成作息日程并在对话中注入实时状态；支持对特定群聊/私聊进行专属提示词定制注入；主动兼容 NAI 生图插件的伴侣直连联动模式（NovelAI 4.5 标签语法与作息情境融合生图）。
 short_desc: 每日作息日程 + 特定会话专属提示词 + NAI 伴侣直连生图联动
-version: v1.2.0
+version: v1.2.1
 author: elegy-snow
 repo: https://github.com/elegy-snow/astrbot_plugin_personated
 support_platforms:
