@@ -136,5 +136,23 @@
     "type": "bool",
     "default": true,
     "hint": "开启后，生成自拍或生活照时会自动提取当前日程时段的活动与心情状态，并将其自然融合进画面提示词中。"
+  },
+  "diary_enabled": {
+    "description": "启用拟人生活日记",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，Bot 将具备记录日常生活日记功能，支持历史按日期归档查阅与 Web 控制台管理。"
+  },
+  "creative_enabled": {
+    "description": "启用书架与创作系统",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，Bot 将具备作品创作与书架展示功能，允许在聊天中被问及作品时调用 pc_view_creative_work 查阅真实正文。"
+  },
+  "bookshelf_secret_password": {
+    "description": "书架抽屉夹层访问密码",
+    "type": "string",
+    "default": "123456",
+    "hint": "抽屉夹层私密作品的解锁密码，在 Web 控制台输入该密码可解锁查看夹层私密作品。"
   }
 }

@@ -57,6 +57,13 @@ const state = {
   umoConfig: { enabled: true, default_inject_mode: "system_prompt", total_rules: 0, enabled_rules: 0 },
   discoveredUmos: [],
   umoFilter: { search: "", chatType: "all", status: "all" },
+  // Diary State
+  diaryEntries: [],
+  selectedDiaryDate: null,
+  // Bookshelf State
+  bookshelfPublic: [],
+  bookshelfSecret: [],
+  drawerUnlocked: false,
 };
 
 // ============================================================================
@@ -185,6 +192,8 @@ function switchView(viewId) {
       "view-rules": "作息规则与分段",
       "view-umo-injector": "会话专属提示词注入",
       "view-nai-bridge": "NAI 生图伴侣联动",
+      "view-diary": "拟人生活日记",
+      "view-bookshelf": "书架作品与抽屉夹层",
     };
     breadcrumb.textContent = titles[viewId] || "拟人化看板";
   }
@@ -201,6 +210,10 @@ function switchView(viewId) {
     loadUmoConfigAndRules();
   } else if (viewId === "view-nai-bridge") {
     loadNaiBridgeData();
+  } else if (viewId === "view-diary") {
+    loadDiaryData();
+  } else if (viewId === "view-bookshelf") {
+    loadBookshelfData();
   }
 }
 
@@ -825,6 +838,14 @@ function setupGlobalWindowHandlers() {
   window.toggleUmoRule = toggleUmoRule;
   window.deleteUmoRule = deleteUmoRule;
   window.copyToClipboard = copyToClipboard;
+
+  // Diary actions
+  window.selectDiary = selectDiary;
+  window.deleteCurrentDiary = deleteCurrentDiary;
+
+  // Bookshelf actions
+  window.editProject = editProject;
+  window.deleteProject = deleteProject;
 }
 
 // ============================================================================
@@ -854,6 +875,10 @@ function bindDomEvents() {
         loadUmoConfigAndRules();
       } else if (state.activeView === "view-nai-bridge") {
         loadNaiBridgeData();
+      } else if (state.activeView === "view-diary") {
+        loadDiaryData();
+      } else if (state.activeView === "view-bookshelf") {
+        loadBookshelfData();
       }
     });
   }
@@ -1107,6 +1132,7 @@ function bindDomEvents() {
 
   // Bind NAI bridge DOM events
   bindNaiBridgeDomEvents();
+  bindDiaryAndBookshelfEvents();
 }
 
 // ============================================================================
@@ -1968,6 +1994,607 @@ function bindNaiBridgeDomEvents() {
   const btnRunTest = document.getElementById("btn-run-nai-test");
   if (btnRunTest) btnRunTest.addEventListener("click", runNaiTestGenerate);
 }
+
+// ============================================================================
+// Diary System Logic
+// ============================================================================
+async function loadDiaryData() {
+  const container = document.getElementById("diary-list-container");
+  if (!container) return;
+  container.innerHTML = '<div class="loading-box">正在加载生活日记...</div>';
+
+  try {
+    const res = await apiGet("diary/entries");
+    if (res && Array.isArray(res.entries)) {
+      state.diaryEntries = res.entries;
+      const totalBadge = document.getElementById("diary-total-badge");
+      if (totalBadge) totalBadge.textContent = `${res.entries.length} 篇`;
+
+      renderDiaryList();
+      if (res.entries.length > 0) {
+        if (!state.selectedDiaryDate || !res.entries.find((e) => e.date === state.selectedDiaryDate)) {
+          selectDiary(res.entries[0].date);
+        } else {
+          selectDiary(state.selectedDiaryDate);
+        }
+      } else {
+        state.selectedDiaryDate = null;
+        renderDiaryDetail(null);
+      }
+    } else {
+      container.innerHTML = '<p class="muted" style="padding:10px;">暂无历史日记</p>';
+      renderDiaryDetail(null);
+    }
+  } catch (e) {
+    console.error("加载日记失败:", e);
+    container.innerHTML = '<p class="muted" style="padding:10px; color:var(--danger);">日记加载失败，请检查插件状态</p>';
+  }
+}
+
+function renderDiaryList() {
+  const container = document.getElementById("diary-list-container");
+  if (!container) return;
+  if (!state.diaryEntries || state.diaryEntries.length === 0) {
+    container.innerHTML = '<p class="muted" style="padding: 10px;">暂无生活日记记录</p>';
+    return;
+  }
+  container.innerHTML = state.diaryEntries
+    .map((entry) => {
+      const isAct = entry.date === state.selectedDiaryDate ? "active" : "";
+      const dateText = escapeHtml(entry.date || "未知日期");
+      const summaryText = escapeHtml(entry.summary || "（暂无题眼）");
+      const formText = escapeHtml(entry.diary_form || "auto");
+      const tagsText = entry.tags && entry.tags.length ? entry.tags.map(t => escapeHtml(t)).join(", ") : "";
+
+      return `
+        <div class="diary-item-card ${isAct}" onclick="window.selectDiary('${dateText}')">
+          <div class="diary-item-head">
+            <span class="diary-item-date">📅 ${dateText}</span>
+            <span class="badge badge-primary" style="font-size: 0.72rem;">${formText}</span>
+          </div>
+          <div class="diary-item-summary" title="${summaryText}">${summaryText}</div>
+          <div class="diary-item-meta">
+            ${tagsText ? `🏷️ ${tagsText}` : "未分类标签"}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function selectDiary(date) {
+  state.selectedDiaryDate = date;
+  renderDiaryList();
+  const entry = state.diaryEntries.find((e) => e.date === date);
+  renderDiaryDetail(entry);
+}
+
+function renderDiaryDetail(entry) {
+  const titleEl = document.getElementById("diary-detail-title");
+  const metaEl = document.getElementById("diary-detail-meta");
+  const bodyEl = document.getElementById("diary-detail-body");
+  const actionsEl = document.getElementById("diary-detail-actions");
+
+  if (!entry) {
+    if (titleEl) titleEl.textContent = "请从左侧选择一篇日记查看，或点击右上角撰写新日记";
+    if (metaEl) metaEl.innerHTML = "";
+    if (bodyEl) bodyEl.textContent = "";
+    if (actionsEl) actionsEl.style.display = "none";
+    return;
+  }
+
+  if (actionsEl) actionsEl.style.display = "block";
+  if (titleEl) titleEl.textContent = `${entry.date} · ${entry.summary || "无题"}`;
+  if (metaEl) {
+    const genTime = entry.generated_at ? escapeHtml(entry.generated_at) : "手动记录";
+    const formVal = escapeHtml(entry.diary_form || "auto");
+    const tags = Array.isArray(entry.tags) ? entry.tags : [];
+    const thread = entry.continuity_thread;
+    let threadHtml = "";
+    if (thread && (thread.motif || thread.status || thread.next_hint)) {
+      threadHtml = `<span class="diary-meta-tag" title="后续轨迹伏笔">🌱 连续线索: ${escapeHtml(thread.motif || thread.status || thread.next_hint)}</span>`;
+    }
+
+    metaEl.innerHTML = `
+      <span class="diary-meta-tag">🕒 记录时刻: ${genTime}</span>
+      <span class="diary-meta-tag">📝 表现体裁: ${formVal}</span>
+      ${tags.length ? tags.map((t) => `<span class="diary-meta-tag">🏷️ ${escapeHtml(t)}</span>`).join("") : ""}
+      ${threadHtml}
+    `;
+  }
+  if (bodyEl) {
+    bodyEl.textContent = entry.body || "（日记内容为空）";
+  }
+}
+
+function openDiaryEditModal(entry = null) {
+  const modal = document.getElementById("modal-diary-edit");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("modal-diary-edit-title");
+  const dateInput = document.getElementById("modal-diary-date");
+  const formSelect = document.getElementById("modal-diary-form");
+  const summaryInput = document.getElementById("modal-diary-summary");
+  const tagsInput = document.getElementById("modal-diary-tags");
+  const bodyInput = document.getElementById("modal-diary-body");
+
+  if (entry) {
+    if (titleEl) titleEl.textContent = `✏️ 编辑日记 (${entry.date})`;
+    if (dateInput) {
+      dateInput.value = entry.date;
+      dateInput.disabled = true;
+    }
+    if (formSelect) formSelect.value = entry.diary_form || "auto";
+    if (summaryInput) summaryInput.value = entry.summary || "";
+    if (tagsInput) tagsInput.value = Array.isArray(entry.tags) ? entry.tags.join(", ") : "";
+    if (bodyInput) bodyInput.value = entry.body || "";
+  } else {
+    if (titleEl) titleEl.textContent = "✍️ 撰写/补写生活日记";
+    if (dateInput) {
+      dateInput.value = formatLocalDate(new Date());
+      dateInput.disabled = false;
+    }
+    if (formSelect) formSelect.value = "auto";
+    if (summaryInput) summaryInput.value = "";
+    if (tagsInput) tagsInput.value = "生活, 心情";
+    if (bodyInput) bodyInput.value = "";
+  }
+
+  modal.classList.add("show");
+}
+
+function closeDiaryEditModal() {
+  const modal = document.getElementById("modal-diary-edit");
+  if (modal) modal.classList.remove("show");
+}
+
+async function saveDiaryModal() {
+  const dateInput = document.getElementById("modal-diary-date");
+  const formSelect = document.getElementById("modal-diary-form");
+  const summaryInput = document.getElementById("modal-diary-summary");
+  const tagsInput = document.getElementById("modal-diary-tags");
+  const bodyInput = document.getElementById("modal-diary-body");
+
+  const dateVal = dateInput ? dateInput.value.trim() : "";
+  const bodyVal = bodyInput ? bodyInput.value.trim() : "";
+  if (!dateVal) {
+    showToast("请选择日记所属日期", "warning");
+    return;
+  }
+  if (!bodyVal) {
+    showToast("请输入日记正文内容", "warning");
+    return;
+  }
+
+  const tagsList = tagsInput && tagsInput.value
+    ? tagsInput.value.split(/[,，]/).map(t => t.trim()).filter(Boolean)
+    : [];
+
+  const nowIso = new Date().toISOString().replace("T", " ").substring(0, 19);
+  const payload = {
+    date: dateVal,
+    generated_at: nowIso,
+    summary: summaryInput ? summaryInput.value.trim() : "",
+    body: bodyVal,
+    diary_form: formSelect ? formSelect.value : "auto",
+    tags: tagsList,
+  };
+
+  try {
+    const res = await apiPost("diary/save", payload);
+    if (res && res.saved) {
+      showToast(res.message || "日记已保存成功！", "success");
+      closeDiaryEditModal();
+      state.selectedDiaryDate = dateVal;
+      await loadDiaryData();
+    } else {
+      showToast((res && res.message) || "保存失败", "error");
+    }
+  } catch (e) {
+    showToast("保存日记请求失败: " + e.message, "error");
+  }
+}
+
+async function deleteCurrentDiary() {
+  if (!state.selectedDiaryDate) return;
+  const d = state.selectedDiaryDate;
+  let confirmed = false;
+  try {
+    confirmed = window.confirm(`确定要彻底删除【${d}】的这篇生活日记吗？此操作无法撤销。`);
+  } catch (_) {
+    confirmed = true;
+  }
+  if (!confirmed) return;
+
+  try {
+    const res = await apiPost("diary/delete", { date: d });
+    if (res && res.deleted) {
+      showToast(`已成功删除 ${d} 的日记`, "success");
+      state.selectedDiaryDate = null;
+      await loadDiaryData();
+    } else {
+      showToast((res && res.message) || "删除失败", "error");
+    }
+  } catch (e) {
+    showToast("删除日记失败: " + e.message, "error");
+  }
+}
+
+// ============================================================================
+// Bookshelf & Creative Logic
+// ============================================================================
+async function loadBookshelfData() {
+  const publicGrid = document.getElementById("public-books-grid");
+  const secretGrid = document.getElementById("secret-books-grid");
+  if (publicGrid) publicGrid.innerHTML = '<div class="loading-box">正在加载公开书架...</div>';
+
+  try {
+    const res = await apiGet("bookshelf/summary");
+    if (res) {
+      state.bookshelfPublic = Array.isArray(res.public_books) ? res.public_books : [];
+      state.bookshelfSecret = Array.isArray(res.secret_books) ? res.secret_books : [];
+
+      const publicBadge = document.getElementById("bookshelf-public-badge");
+      if (publicBadge) publicBadge.textContent = `${state.bookshelfPublic.length} 本`;
+
+      const secretBadge = document.getElementById("bookshelf-secret-badge");
+      if (secretBadge) secretBadge.textContent = `${state.bookshelfSecret.length} 本`;
+
+      renderBookshelf();
+    }
+  } catch (e) {
+    console.error("加载书架失败:", e);
+    if (publicGrid) publicGrid.innerHTML = '<p class="muted" style="color:var(--danger)">加载书架失败，请检查插件运行状态</p>';
+  }
+}
+
+function renderBookshelf() {
+  const publicGrid = document.getElementById("public-books-grid");
+  const secretGrid = document.getElementById("secret-books-grid");
+
+  if (publicGrid) {
+    if (state.bookshelfPublic.length === 0) {
+      publicGrid.innerHTML = '<p class="muted">公开书架暂无作品，点击右上角「新建创作作品」添加</p>';
+    } else {
+      publicGrid.innerHTML = state.bookshelfPublic.map((b) => renderBookCardHtml(b, false)).join("");
+    }
+  }
+
+  if (secretGrid) {
+    if (!state.drawerUnlocked) {
+      secretGrid.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 24px; text-align: center; background: var(--bg-card); border-radius: var(--radius-md); border: 1px dashed var(--border);">
+          <div style="font-size: 2rem; margin-bottom: 6px;">🔒</div>
+          <div style="font-weight: 600; margin-bottom: 4px;">抽屉夹层已锁定</div>
+          <div class="hint-text" style="margin-bottom: 12px;">受专属密码保护，仅在解锁后可浏览与编辑私密作品</div>
+          <button class="btn btn-secondary btn-sm" onclick="window.unlockDrawer()">🔓 立即输入密码解锁</button>
+        </div>
+      `;
+    } else {
+      if (state.bookshelfSecret.length === 0) {
+        secretGrid.innerHTML = '<p class="muted">抽屉夹层为空，暂无私密作品</p>';
+      } else {
+        secretGrid.innerHTML = state.bookshelfSecret.map((b) => renderBookCardHtml(b, true)).join("");
+      }
+    }
+  }
+}
+
+function renderBookCardHtml(book, isSecret = false) {
+  const bookId = escapeHtml(book.id || "");
+  const title = escapeHtml(book.title || "未命名作品");
+  const workType = escapeHtml(book.work_type || "短篇小说");
+  const status = escapeHtml(book.status || "drafting");
+  const tone = escapeHtml(book.tone || "温柔");
+  const premise = escapeHtml(book.premise || "暂无作品立意设定...");
+  const chars = Number(book.current_chars || 0);
+
+  const statusMap = {
+    drafting: "✍️ 创作中",
+    finished: "✅ 已完结",
+    paused: "⏸️ 搁置中",
+  };
+  const statusLabel = statusMap[status] || status;
+
+  return `
+    <div class="book-card ${isSecret ? 'secret-book' : ''}" data-id="${bookId}">
+      <div class="book-header">
+        <h4 class="book-title">《${title}》</h4>
+        <span class="badge ${isSecret ? 'badge-gray' : 'badge-primary'}" style="font-size: 0.72rem;">${workType}</span>
+      </div>
+      <div class="book-meta-pills">
+        <span class="badge badge-gray" style="font-size: 0.7rem;">${statusLabel}</span>
+        <span class="badge badge-gray" style="font-size: 0.7rem;">基调: ${tone}</span>
+      </div>
+      <div class="book-stats-row">
+        <span>📊 累计: <strong>${chars}</strong> 字</span>
+        <span>⏱️ ${book.updated_at ? new Date(book.updated_at * 1000).toLocaleDateString() : '近期'}</span>
+      </div>
+      <div class="book-premise" title="${premise}">${premise}</div>
+      <div class="book-actions-bar">
+        <button class="btn btn-secondary btn-sm" onclick="window.editProject('${bookId}')">✏️ 查阅与编辑</button>
+        <button class="btn btn-danger-outline btn-sm" onclick="window.deleteProject('${bookId}', '${escapeHtml(title)}')">🗑️</button>
+      </div>
+    </div>
+  `;
+}
+
+function openProjectEditModal(proj = null) {
+  const modal = document.getElementById("modal-project-edit");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("modal-project-edit-title");
+  const idInput = document.getElementById("modal-project-id");
+  const titleInput = document.getElementById("modal-project-title");
+  const typeSelect = document.getElementById("modal-project-work-type");
+  const toneInput = document.getElementById("modal-project-tone");
+  const statusSelect = document.getElementById("modal-project-status");
+  const premiseInput = document.getElementById("modal-project-premise");
+  const contentInput = document.getElementById("modal-project-content");
+  const secretCheck = document.getElementById("modal-project-secret");
+
+  if (proj) {
+    if (titleEl) titleEl.textContent = `✏️ 编辑作品《${proj.title}》`;
+    if (idInput) idInput.value = proj.id || "";
+    if (titleInput) titleInput.value = proj.title || "";
+    if (typeSelect) typeSelect.value = proj.work_type || "短篇小说";
+    if (toneInput) toneInput.value = proj.tone || "温柔";
+    if (statusSelect) statusSelect.value = proj.status || "drafting";
+    if (premiseInput) premiseInput.value = proj.premise || "";
+
+    // Join draft chunks text if available
+    let draftText = "";
+    if (Array.isArray(proj.draft_chunks)) {
+      draftText = proj.draft_chunks.map((c) => (typeof c === "string" ? c : (c.text || ""))).join("\n\n");
+    }
+    if (contentInput) contentInput.value = draftText;
+    if (secretCheck) secretCheck.checked = Boolean(proj.secret);
+  } else {
+    if (titleEl) titleEl.textContent = "✨ 新建创作作品";
+    if (idInput) idInput.value = `proj_${Date.now().toString(36)}`;
+    if (titleInput) titleInput.value = "";
+    if (typeSelect) typeSelect.value = "短篇小说";
+    if (toneInput) toneInput.value = "温柔";
+    if (statusSelect) statusSelect.value = "drafting";
+    if (premiseInput) premiseInput.value = "";
+    if (contentInput) contentInput.value = "";
+    if (secretCheck) secretCheck.checked = false;
+  }
+
+  modal.classList.add("show");
+}
+
+function closeProjectEditModal() {
+  const modal = document.getElementById("modal-project-edit");
+  if (modal) modal.classList.remove("show");
+}
+
+async function editProject(projId) {
+  try {
+    const res = await apiGet("creative/detail", { id: projId });
+    if (res && res.found && res.project) {
+      openProjectEditModal(res.project);
+    } else {
+      showToast((res && res.message) || "未找到该作品详情", "error");
+    }
+  } catch (e) {
+    showToast("获取作品详情失败: " + e.message, "error");
+  }
+}
+
+async function saveProjectModal() {
+  const idInput = document.getElementById("modal-project-id");
+  const titleInput = document.getElementById("modal-project-title");
+  const typeSelect = document.getElementById("modal-project-work-type");
+  const toneInput = document.getElementById("modal-project-tone");
+  const statusSelect = document.getElementById("modal-project-status");
+  const premiseInput = document.getElementById("modal-project-premise");
+  const contentInput = document.getElementById("modal-project-content");
+  const secretCheck = document.getElementById("modal-project-secret");
+
+  const projId = idInput ? idInput.value.trim() : "";
+  const titleVal = titleInput ? titleInput.value.trim() : "";
+  if (!projId || !titleVal) {
+    showToast("请输入作品名称", "warning");
+    return;
+  }
+
+  const contentText = contentInput ? contentInput.value : "";
+  const chunks = contentText.trim() ? [{ text: contentText.trim(), created_at: Date.now() / 1000 }] : [];
+
+  const payload = {
+    id: projId,
+    title: titleVal,
+    work_type: typeSelect ? typeSelect.value : "短篇小说",
+    tone: toneInput ? toneInput.value.trim() : "温柔",
+    status: statusSelect ? statusSelect.value : "drafting",
+    premise: premiseInput ? premiseInput.value.trim() : "",
+    draft_chunks: chunks,
+    current_chars: contentText.length,
+    secret: secretCheck ? secretCheck.checked : false,
+    updated_at: Date.now() / 1000,
+  };
+
+  try {
+    const res = await apiPost("creative/save", payload);
+    if (res && res.saved) {
+      showToast(res.message || "作品已成功保存", "success");
+      closeProjectEditModal();
+      await loadBookshelfData();
+    } else {
+      showToast((res && res.message) || "保存失败", "error");
+    }
+  } catch (e) {
+    showToast("保存作品失败: " + e.message, "error");
+  }
+}
+
+async function deleteProject(projId, title = "") {
+  let confirmed = false;
+  try {
+    confirmed = window.confirm(`确定要删除作品《${title || projId}》吗？此操作不可撤销。`);
+  } catch (_) {
+    confirmed = true;
+  }
+  if (!confirmed) return;
+
+  try {
+    const res = await apiPost("creative/delete", { id: projId });
+    if (res && res.deleted) {
+      showToast("作品已成功删除", "success");
+      await loadBookshelfData();
+    } else {
+      showToast((res && res.message) || "删除失败", "error");
+    }
+  } catch (e) {
+    showToast("删除请求失败: " + e.message, "error");
+  }
+}
+
+function openUnlockDrawerModal() {
+  const modal = document.getElementById("modal-unlock-drawer");
+  const input = document.getElementById("modal-unlock-password");
+  const err = document.getElementById("modal-unlock-error");
+  if (err) {
+    err.style.display = "none";
+    err.textContent = "";
+  }
+  if (input) input.value = "";
+  if (modal) modal.classList.add("show");
+  setTimeout(() => { if (input) input.focus(); }, 100);
+}
+
+function closeUnlockDrawerModal() {
+  const modal = document.getElementById("modal-unlock-drawer");
+  if (modal) modal.classList.remove("show");
+}
+
+async function submitUnlockDrawer() {
+  const input = document.getElementById("modal-unlock-password");
+  const err = document.getElementById("modal-unlock-error");
+  const pwd = input ? input.value.trim() : "";
+  if (!pwd) {
+    if (err) {
+      err.textContent = "请输入密码";
+      err.style.display = "block";
+    }
+    return;
+  }
+  try {
+    const res = await apiPost("bookshelf/unlock", { password: pwd });
+    if (res && res.unlocked) {
+      state.drawerUnlocked = true;
+      const statusBadge = document.getElementById("drawer-lock-status");
+      if (statusBadge) {
+        statusBadge.textContent = "已解锁";
+        statusBadge.className = "badge badge-primary";
+      }
+      closeUnlockDrawerModal();
+      showToast("抽屉夹层已成功打开！", "success");
+      renderBookshelf();
+    } else {
+      const msg = (res && res.message) || "密码错误，无法打开抽屉";
+      if (err) {
+        err.textContent = msg;
+        err.style.display = "block";
+      } else {
+        showToast(msg, "error");
+      }
+    }
+  } catch (e) {
+    const msg = "解锁请求失败: " + e.message;
+    if (err) {
+      err.textContent = msg;
+      err.style.display = "block";
+    } else {
+      showToast(msg, "error");
+    }
+  }
+}
+
+function unlockDrawer() {
+  openUnlockDrawerModal();
+}
+
+function bindDiaryAndBookshelfEvents() {
+  window.unlockDrawer = unlockDrawer;
+
+  // Drawer unlock modal events
+  const modalUnlockClose = document.getElementById("modal-unlock-drawer-close");
+  const modalUnlockCancel = document.getElementById("modal-unlock-drawer-cancel");
+  const modalUnlockSubmit = document.getElementById("modal-unlock-drawer-submit");
+  const modalUnlockInput = document.getElementById("modal-unlock-password");
+
+  if (modalUnlockClose) modalUnlockClose.addEventListener("click", closeUnlockDrawerModal);
+  if (modalUnlockCancel) modalUnlockCancel.addEventListener("click", closeUnlockDrawerModal);
+  if (modalUnlockSubmit) modalUnlockSubmit.addEventListener("click", submitUnlockDrawer);
+  if (modalUnlockInput) {
+    modalUnlockInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitUnlockDrawer();
+      }
+    });
+  }
+
+  // Diary Event Listeners
+  const btnDiaryRefresh = document.getElementById("btn-diary-refresh");
+  if (btnDiaryRefresh) {
+    btnDiaryRefresh.addEventListener("click", () => {
+      showToast("正在刷新日记...", "info");
+      loadDiaryData();
+    });
+  }
+
+  const btnNewDiary = document.getElementById("btn-diary-new");
+  if (btnNewDiary) {
+    btnNewDiary.addEventListener("click", () => openDiaryEditModal(null));
+  }
+
+  const btnDiaryDelete = document.getElementById("btn-diary-delete");
+  if (btnDiaryDelete) {
+    btnDiaryDelete.addEventListener("click", deleteCurrentDiary);
+  }
+
+  const modalDiaryClose = document.getElementById("modal-diary-close");
+  const modalDiaryCancel = document.getElementById("modal-diary-cancel");
+  const modalDiarySave = document.getElementById("modal-diary-save");
+  if (modalDiaryClose) modalDiaryClose.addEventListener("click", closeDiaryEditModal);
+  if (modalDiaryCancel) modalDiaryCancel.addEventListener("click", closeDiaryEditModal);
+  if (modalDiarySave) modalDiarySave.addEventListener("click", saveDiaryModal);
+
+  // Bookshelf Event Listeners
+  const btnBookshelfRefresh = document.getElementById("btn-bookshelf-refresh");
+  if (btnBookshelfRefresh) {
+    btnBookshelfRefresh.addEventListener("click", () => {
+      showToast("正在刷新书架...", "info");
+      loadBookshelfData();
+    });
+  }
+
+  const btnUnlock = document.getElementById("btn-unlock-drawer");
+  if (btnUnlock) btnUnlock.addEventListener("click", unlockDrawer);
+
+  const btnCreateProj = document.getElementById("btn-create-project");
+  if (btnCreateProj) {
+    btnCreateProj.addEventListener("click", () => openProjectEditModal(null));
+  }
+
+  const modalProjClose = document.getElementById("modal-project-close");
+  const modalProjCancel = document.getElementById("modal-project-cancel");
+  const modalProjSave = document.getElementById("modal-project-save");
+  if (modalProjClose) modalProjClose.addEventListener("click", closeProjectEditModal);
+  if (modalProjCancel) modalProjCancel.addEventListener("click", closeProjectEditModal);
+  if (modalProjSave) modalProjSave.addEventListener("click", saveProjectModal);
+}
+
+// 扩展全局刷新逻辑
+const originalRefreshAll = typeof refreshAllData === "function" ? refreshAllData : null;
+refreshAllData = function() {
+  if (originalRefreshAll) originalRefreshAll();
+  loadDiaryData();
+  loadBookshelfData();
+};
 
 // Start on DOMContentLoaded
 if (document.readyState === "loading") {

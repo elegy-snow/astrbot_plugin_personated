@@ -37,9 +37,14 @@ try:
     from .modules.schedule.manager import ScheduleManager
     from .modules.schedule.web_api import ScheduleWebApi
     from .modules.prompt_injector.manager import PromptInjectorManager
+    from .modules.prompt_injector.model import parse_umo_details
     from .modules.prompt_injector.web_api import PromptInjectorWebApi
     from .modules.nai_bridge.manager import NAIBridgeManager
     from .modules.nai_bridge.web_api import NAIBridgeWebApi
+    from .modules.diary.manager import DiaryManager
+    from .modules.diary.web_api import DiaryWebApi
+    from .modules.creative.manager import CreativeManager
+    from .modules.creative.web_api import CreativeWebApi
     from .utils.time_utils import get_current_time_str, get_today_str, get_weekday_cn
 except (ImportError, ValueError):
     # Only expose the plugin directory on sys.path when this module is executed
@@ -52,9 +57,14 @@ except (ImportError, ValueError):
     from modules.schedule.manager import ScheduleManager
     from modules.schedule.web_api import ScheduleWebApi
     from modules.prompt_injector.manager import PromptInjectorManager
+    from modules.prompt_injector.model import parse_umo_details
     from modules.prompt_injector.web_api import PromptInjectorWebApi
     from modules.nai_bridge.manager import NAIBridgeManager
     from modules.nai_bridge.web_api import NAIBridgeWebApi
+    from modules.diary.manager import DiaryManager
+    from modules.diary.web_api import DiaryWebApi
+    from modules.creative.manager import CreativeManager
+    from modules.creative.web_api import CreativeWebApi
     from utils.time_utils import get_current_time_str, get_today_str, get_weekday_cn
 
 if TYPE_CHECKING:
@@ -90,6 +100,16 @@ class PersonatedPlugin(Star):
         self.nai_api = NAIBridgeWebApi(self.nai_manager, self.logger)
         self.nai_api.register_routes(self.context)
 
+        # 4. 拟人日记系统
+        self.diary_manager = DiaryManager(self.context, self.config, self.logger)
+        self.diary_api = DiaryWebApi(self.diary_manager, self.logger)
+        self.diary_api.register_routes(self.context)
+
+        # 5. 创作与书架系统
+        self.creative_manager = CreativeManager(self.context, self.config, self.logger)
+        self.creative_api = CreativeWebApi(self.creative_manager, self.logger)
+        self.creative_api.register_routes(self.context)
+
         self._nai_tool_ready = False
 
     async def initialize(self) -> None:
@@ -112,7 +132,18 @@ class PersonatedPlugin(Star):
         except Exception as e:
             logger.error(f"{LOG_TAG} 会话提示词服务启动失败: {e}", exc_info=True)
 
+        try:
+            await self.diary_manager.initialize()
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 日记服务启动失败: {e}", exc_info=True)
+
+        try:
+            await self.creative_manager.initialize()
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 创作与书架服务启动失败: {e}", exc_info=True)
+
         await self._ensure_nai_llm_tool_active()
+        await self._ensure_creative_llm_tool_active()
         logger.info(f"{LOG_TAG} 插件服务初始化完成，当前处于就绪状态。")
 
     async def _ensure_nai_llm_tool_active(self) -> None:
@@ -165,6 +196,35 @@ class PersonatedPlugin(Star):
             f"{LOG_TAG} LLM 工具 {NAI_LLM_TOOL_NAME} 已就绪 "
             f"(归属: {tool.handler_module_path}, 激活: {getattr(tool, 'active', True)})"
         )
+
+    async def _ensure_creative_llm_tool_active(self) -> None:
+        """Verify and repair the registration state of the creative work LLM tool."""
+        tool_name = "pc_view_creative_work"
+        plugin_module_path = type(self).__module__
+        try:
+            tool_mgr = self.context.get_llm_tool_manager()
+            tool = (
+                tool_mgr.get_func(tool_name)
+                if tool_mgr is not None and hasattr(tool_mgr, "get_func")
+                else None
+            )
+        except Exception as e:
+            logger.error(f"{LOG_TAG} 获取 LLM 工具管理器失败: {e}")
+            return
+
+        if tool is None:
+            return
+
+        if not getattr(tool, "handler_module_path", None):
+            tool.handler_module_path = plugin_module_path
+
+        if not getattr(tool, "active", True):
+            try:
+                activated = await self.context.activate_llm_tool_async(tool_name)
+                if not activated:
+                    tool.active = True
+            except Exception:
+                tool.active = True
 
     async def terminate(self) -> None:
         """插件卸载/重载清理。"""
@@ -355,7 +415,6 @@ class PersonatedPlugin(Star):
         umo = str(getattr(event, "unified_msg_origin", "") or "").strip()
         self.prompt_injector_mgr.observe_event(event)
 
-        from modules.prompt_injector.model import parse_umo_details
         parsed = parse_umo_details(umo)
 
         rule = self.prompt_injector_mgr.get_rule(umo)
@@ -393,7 +452,6 @@ class PersonatedPlugin(Star):
             yield event.plain_result("❌ 提示词内容不能为空！用法：`/umo set <个性化提示词>`")
             return
 
-        from modules.prompt_injector.model import parse_umo_details
         parsed = parse_umo_details(umo)
 
         # 尝试获取群名或昵称作为规则名
@@ -436,7 +494,6 @@ class PersonatedPlugin(Star):
             yield event.plain_result("❌ 用法：`/umo setumo <target_umo> <提示词>`")
             return
 
-        from modules.prompt_injector.model import parse_umo_details
         parsed = parse_umo_details(u)
 
         rule = self.prompt_injector_mgr.save_rule({
@@ -554,6 +611,178 @@ class PersonatedPlugin(Star):
 
         # Send image via AstrBot message chain
         yield event.image_result(res.image_path)
+
+    # =========================================================================
+    # 4. 指令组：日记系统 (/diary, /日记)
+    # =========================================================================
+    @filter.command_group("diary", alias={"日记"})
+    def diary_group():
+        """拟人化日记指令组"""
+        pass
+
+    @diary_group.command("today", alias={"今日", "查看"})
+    async def diary_today_cmd(self, event: AstrMessageEvent) -> None:
+        """查看今日日记"""
+        if not self.diary_manager.enabled:
+            yield event.plain_result("📖 日记功能未在插件配置中启用。")
+            return
+        today_str = get_today_str()
+        entry = self.diary_manager.get_entry(today_str)
+        if not entry:
+            yield event.plain_result(f"📖 今日（{today_str}）还没有日记。")
+            return
+
+        lines = [
+            f"📖 【今日日记 · {entry.date}】",
+            f"✨ 题眼：{entry.summary or '无题'}",
+            f"🏷️ 标签：{', '.join(entry.tags) if entry.tags else '无'}",
+            "----------------------------",
+            entry.body,
+        ]
+        yield event.plain_result("\n".join(lines))
+
+    @diary_group.command("list", alias={"列表", "历史"})
+    async def diary_list_cmd(self, event: AstrMessageEvent) -> None:
+        """列出最近的日记记录"""
+        if not self.diary_manager.enabled:
+            yield event.plain_result("📖 日记功能未在插件配置中启用。")
+            return
+        entries = self.diary_manager.list_entries()
+        if not entries:
+            yield event.plain_result("📖 目前没有任何日记记录。")
+            return
+
+        lines = [f"📖 【日记记录（共 {len(entries)} 篇）】"]
+        for e in entries[:10]:
+            lines.append(f"• {e.date}: {e.summary or '（无题眼）'}")
+        if len(entries) > 10:
+            lines.append(f"... 还有 {len(entries) - 10} 篇，请前往 Web 控制台查看")
+        yield event.plain_result("\n".join(lines))
+
+    # =========================================================================
+    # 5. 指令组：创作与书架系统 (/creative, /书架, /创作)
+    # =========================================================================
+    @filter.command_group("creative", alias={"书架", "创作"})
+    def creative_group():
+        """拟人化创作与书架指令组"""
+        pass
+
+    @creative_group.command("list", alias={"列表"})
+    async def creative_list_cmd(self, event: AstrMessageEvent) -> None:
+        """查看书架作品列表"""
+        if not self.creative_manager.enabled:
+            yield event.plain_result("📚 书架与创作功能未在插件配置中启用。")
+            return
+        projects = self.creative_manager.list_projects()
+        public_books = [p for p in projects if not p.secret]
+        secret_books = [p for p in projects if p.secret]
+
+        if not projects:
+            yield event.plain_result("📚 书架上目前空空如也，还没有任何创作作品。")
+            return
+
+        lines = [
+            f"📚 【书架作品 · 共 {len(projects)} 部】",
+            f"• 公开书架：{len(public_books)} 部",
+            f"• 抽屉夹层：{len(secret_books)} 部（受密码保护）",
+            "----------------------------",
+        ]
+        for idx, p in enumerate(public_books[:10], start=1):
+            lines.append(f"{idx}. 《{p.title}》[{p.work_type}] - {p.current_chars} 字 ({p.status})")
+
+        if secret_books:
+            lines.append(f"\n🔒 另有 {len(secret_books)} 篇私密作品藏在抽屉夹层中，请在控制台解锁查看。")
+
+        yield event.plain_result("\n".join(lines))
+
+    @filter.llm_tool(name="pc_view_creative_work")
+    async def pc_view_creative_work(
+        self,
+        event: AstrMessageEvent,
+        action: str = "get",
+        selector: str = "",
+        part: int = 0,
+        max_chars: int = 6000,
+    ) -> str:
+        """只读查看 Bot 自己资料柜的真实库存、创作项目与正文。
+
+        Args:
+            action(string): list/get。list 列出资料柜库存与作品；get 读取指定作品正文。
+            selector(string): 作品准确标题、项目 id 或列表编号；留空时 get 默认读取最近一篇。
+            part(number): 可选，明确读取第几部分，按 1 开始；0 表示从第一部分起按预算读取。
+            max_chars(number): 可选，本次最多返回正文字符数，默认 6000。
+        """
+        import json
+        if not self.creative_manager.enabled:
+            return json.dumps({
+                "status": "disabled",
+                "message": "书架与创作系统已在插件设置中关闭。",
+            }, ensure_ascii=False)
+        normalized_action = str(action or "get").strip().lower()
+        projects = self.creative_manager.list_projects()
+
+        if normalized_action == "list":
+            summaries = []
+            for idx, p in enumerate(projects, start=1):
+                if p.secret:
+                    continue
+                summaries.append({
+                    "index": idx,
+                    "id": p.id,
+                    "title": p.title or "未定标题",
+                    "work_type": p.work_type,
+                    "status": p.status,
+                    "current_chars": p.current_chars,
+                    "part_count": len(p.draft_chunks),
+                })
+            return json.dumps({
+                "status": "success",
+                "action": "list",
+                "count": len(summaries),
+                "projects": summaries,
+                "instruction": "直接依据这份真实库存回答，不要虚构作品或未提及的章节。",
+            }, ensure_ascii=False)
+
+        # Action: get
+        matches = self.creative_manager.find_projects_by_selector(selector)
+        if not matches:
+            return json.dumps({
+                "status": "not_found",
+                "message": f"未找到匹配的作品: {selector}",
+            }, ensure_ascii=False)
+
+        project = matches[0]
+        if project.secret:
+            return json.dumps({
+                "status": "locked",
+                "message": "该作品位于私密抽屉夹层中，受密码保护，无法直接读取正文。",
+            }, ensure_ascii=False)
+
+        chunks = project.draft_chunks
+        if not chunks:
+            return json.dumps({
+                "status": "empty",
+                "title": project.title,
+                "message": "这部作品目前还没有成稿正文。",
+            }, ensure_ascii=False)
+
+        if part > 0 and part <= len(chunks):
+            selected_chunks = [chunks[part - 1]]
+        else:
+            selected_chunks = chunks
+
+        full_text = "\n\n".join(c.text for c in selected_chunks)
+        if len(full_text) > max_chars:
+            full_text = full_text[:max_chars] + "\n...(正文过长已截断)"
+
+        return json.dumps({
+            "status": "success",
+            "title": project.title,
+            "work_type": project.work_type,
+            "premise": project.premise,
+            "content": full_text,
+            "total_chars": project.current_chars,
+        }, ensure_ascii=False)
 
     @filter.llm_tool(name="pc_generate_photo")
     async def pc_generate_photo(

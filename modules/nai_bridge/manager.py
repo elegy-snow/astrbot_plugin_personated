@@ -16,7 +16,7 @@ from .prompt_format import (
 )
 
 if TYPE_CHECKING:
-    from modules.schedule.manager import ScheduleManager
+    from ..schedule.manager import ScheduleManager
 
 logger = logging.getLogger("astrbot_plugin_personated.nai_manager")
 

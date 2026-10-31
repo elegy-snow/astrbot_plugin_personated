@@ -1193,6 +1193,11 @@ select.input-control:focus {
   width: 92% !important;
 }
 
+.modal-sm {
+  max-width: 380px !important;
+  width: 90% !important;
+}
+
 #modal-umo-rule .form-group {
   margin-bottom: 9px;
   gap: 3px;
@@ -1477,3 +1482,284 @@ select.input-control:focus {
     display: none;
   }
 }
+
+/* ==========================================================================
+   VIEW 6: Diary System Styles
+   ========================================================================== */
+.diary-container {
+  display: flex;
+  gap: 24px;
+  min-height: 520px;
+}
+
+.diary-sidebar {
+  flex: 0 0 320px;
+  border-right: 1px solid var(--border);
+  padding-right: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.diary-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.diary-sidebar-header h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.diary-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 580px;
+  padding-right: 4px;
+}
+
+.diary-item-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  cursor: pointer;
+  background: var(--bg-card);
+  transition: all 0.2s ease;
+}
+
+.diary-item-card:hover {
+  border-color: var(--primary);
+  background: var(--primary-subtle);
+  transform: translateX(2px);
+}
+
+.diary-item-card.active {
+  border-color: var(--primary);
+  background: var(--primary-subtle);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.diary-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.diary-item-date {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--primary);
+}
+
+.diary-item-summary {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diary-item-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.diary-content-pane {
+  flex: 1;
+  min-width: 0;
+}
+
+.diary-paper {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.diary-paper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.diary-paper-header h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.diary-meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border);
+  margin-bottom: 16px;
+}
+
+.diary-meta-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-card);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.diary-paper-body {
+  font-size: 0.98rem;
+  line-height: 1.8;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+
+/* ==========================================================================
+   VIEW 7: Bookshelf & Creative Styles
+   ========================================================================== */
+.bookshelf-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.bookshelf-section {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.bookshelf-section.secret-section {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.bookshelf-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-title-wrap h4 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.books-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.book-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.book-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.book-card.secret-book {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: var(--bg-card);
+}
+
+.book-card.secret-book:hover {
+  border-color: var(--danger);
+}
+
+.book-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.book-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.book-meta-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.book-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.book-premise {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 14px;
+  flex: 1;
+}
+
+.book-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+

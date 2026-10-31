@@ -44,6 +44,16 @@
             <span class="nav-label">NAI 生图伴侣联动</span>
             <span class="badge badge-primary">新功能</span>
           </li>
+          <li class="nav-item" data-view="view-diary">
+            <span class="nav-icon">📖</span>
+            <span class="nav-label">拟人生活日记</span>
+            <span class="badge badge-primary">新功能</span>
+          </li>
+          <li class="nav-item" data-view="view-bookshelf">
+            <span class="nav-icon">📚</span>
+            <span class="nav-label">书架与创作</span>
+            <span class="badge badge-primary">新功能</span>
+          </li>
         </ul>
 
         <div class="nav-section-title">综合扩展规划</div>
@@ -56,11 +66,6 @@
           <li class="nav-item disabled" title="功能正在规划与接入中">
             <span class="nav-icon">💬</span>
             <span class="nav-label">离线问候与搭话</span>
-            <span class="badge badge-gray">即将推出</span>
-          </li>
-          <li class="nav-item disabled" title="功能正在规划与接入中">
-            <span class="nav-icon">📖</span>
-            <span class="nav-label">拟人生活日记</span>
             <span class="badge badge-gray">即将推出</span>
           </li>
         </ul>
@@ -574,6 +579,90 @@
           </div>
         </div>
       </section>
+
+      <!-- VIEW 6: 拟人日记本 -->
+      <section id="view-diary" class="view-panel">
+        <div class="card">
+          <div class="card-header-bar">
+            <div>
+              <h3>📖 拟人生活日记</h3>
+              <p class="section-desc">Bot 的每日内心独白、生活足迹与连续叙事轨迹</p>
+            </div>
+            <div class="header-right-tools">
+              <button class="btn btn-secondary btn-sm" id="btn-diary-refresh">🔄 刷新日记</button>
+              <button class="btn btn-primary btn-sm" id="btn-diary-new">✍️ 新建/补写日记</button>
+            </div>
+          </div>
+          <div class="diary-container">
+            <div class="diary-sidebar">
+              <div class="diary-sidebar-header">
+                <h4>历史日记列表</h4>
+                <span class="badge badge-gray" id="diary-total-badge">0 篇</span>
+              </div>
+              <div id="diary-list-container" class="diary-list">
+                <p class="muted">加载中...</p>
+              </div>
+            </div>
+            <div class="diary-content-pane">
+              <div id="diary-detail-view" class="diary-paper">
+                <div class="diary-paper-header">
+                  <h3 id="diary-detail-title">请选择一篇日记查看</h3>
+                  <div class="diary-actions" id="diary-detail-actions" style="display: none;">
+                    <button class="btn btn-outline btn-sm" id="btn-diary-delete" title="删除本日记">🗑️ 删除</button>
+                  </div>
+                </div>
+                <div id="diary-detail-meta" class="diary-meta-bar"></div>
+                <div id="diary-detail-body" class="diary-paper-body"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 7: 书架与创作系统 -->
+      <section id="view-bookshelf" class="view-panel">
+        <div class="card">
+          <div class="card-header-bar">
+            <div>
+              <h3>📚 书架作品与抽屉夹层</h3>
+              <p class="section-desc">Bot 独立长篇/短文创作作品库、草稿进度与私密抽屉</p>
+            </div>
+            <div class="header-right-tools">
+              <button class="btn btn-outline btn-sm" id="btn-bookshelf-refresh">🔄 刷新书架</button>
+              <button class="btn btn-secondary btn-sm" id="btn-unlock-drawer">🔓 解锁抽屉夹层</button>
+              <button class="btn btn-primary btn-sm" id="btn-create-project">✨ 新建创作作品</button>
+            </div>
+          </div>
+          <div class="bookshelf-wrap">
+            <div class="bookshelf-section">
+              <div class="bookshelf-section-header">
+                <div class="section-title-wrap">
+                  <h4>📖 公开书架</h4>
+                  <span class="badge badge-primary" id="bookshelf-public-badge">0 本</span>
+                </div>
+                <span class="hint-text">对外展示的短篇、小说、故事集</span>
+              </div>
+              <div id="public-books-grid" class="books-grid">
+                <p class="muted">暂无公开创作作品</p>
+              </div>
+            </div>
+
+            <div class="bookshelf-section secret-section">
+              <div class="bookshelf-section-header">
+                <div class="section-title-wrap">
+                  <h4>🔒 抽屉夹层 (受密码保护)</h4>
+                  <span id="drawer-lock-status" class="badge badge-gray">已锁定</span>
+                  <span class="badge badge-gray" id="bookshelf-secret-badge">0 本</span>
+                </div>
+                <span class="hint-text">伴侣的私密随笔、日记夹层与未公开手稿</span>
+              </div>
+              <div id="secret-books-grid" class="books-grid">
+                <p class="muted">请点击右上角输入密码解锁后查看</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- 模态框 1：从 AstrBot '数据与日志-对话' 抓取并选择会话 -->
@@ -712,6 +801,138 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" id="modal-item-cancel">取消</button>
           <button class="btn btn-primary" id="modal-item-save">确定并更新</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模态框 3：新建/编辑日记 -->
+    <div class="modal-overlay" id="modal-diary-edit">
+      <div class="modal-content modal-md">
+        <div class="modal-header">
+          <h3 id="modal-diary-edit-title">✍️ 撰写/补写生活日记</h3>
+          <button class="modal-close" id="modal-diary-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="modal-diary-date">日记日期 <span class="required" style="color:var(--danger)">*</span></label>
+              <input type="date" id="modal-diary-date" class="input-control" />
+            </div>
+            <div class="form-group">
+              <label for="modal-diary-form">记录体裁 / 形式</label>
+              <select id="modal-diary-form" class="select-control">
+                <option value="auto">auto (日常散文感)</option>
+                <option value="monologue">内心独白 (Monologue)</option>
+                <option value="bullet_memo">便签清单 (Bullet Memo)</option>
+                <option value="letter_to_user">写给你的信 (Letter)</option>
+                <option value="stream_of_consciousness">意识流碎片 (Stream)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="modal-diary-summary">题眼 / 一句话概括</label>
+            <input type="text" id="modal-diary-summary" class="input-control" placeholder="如：阳光正好的午后，与你的浅浅对谈" />
+          </div>
+
+          <div class="form-group">
+            <label for="modal-diary-tags">标签 (用英文或中文逗号隔开)</label>
+            <input type="text" id="modal-diary-tags" class="input-control" placeholder="生活, 散步, 心情" />
+          </div>
+
+          <div class="form-group">
+            <label for="modal-diary-body">日记正文内容 <span class="required" style="color:var(--danger)">*</span></label>
+            <textarea id="modal-diary-body" class="textarea-control" rows="8" placeholder="记录今天发生的点滴、心境变化或想对你说的话..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="modal-diary-cancel">取消</button>
+          <button class="btn btn-primary btn-sm" id="modal-diary-save">💾 保存日记</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模态框 4：新建/编辑创作作品 -->
+    <div class="modal-overlay" id="modal-project-edit">
+      <div class="modal-content modal-md">
+        <div class="modal-header">
+          <h3 id="modal-project-edit-title">✨ 新建/编辑创作项目</h3>
+          <button class="modal-close" id="modal-project-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modal-project-id" />
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="modal-project-title">作品名称 / 篇名 <span class="required" style="color:var(--danger)">*</span></label>
+              <input type="text" id="modal-project-title" class="input-control" placeholder="如：《月色与机械诗》" />
+            </div>
+            <div class="form-group">
+              <label for="modal-project-work-type">作品体裁</label>
+              <select id="modal-project-work-type" class="select-control">
+                <option value="短篇小说">短篇小说</option>
+                <option value="长篇连载">长篇连载</option>
+                <option value="散文诗歌">散文诗歌</option>
+                <option value="随笔手记">随笔手记</option>
+                <option value="剧本对白">剧本对白</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="modal-project-tone">基调风格</label>
+              <input type="text" id="modal-project-tone" class="input-control" placeholder="如：温柔、轻快、微悬疑" />
+            </div>
+            <div class="form-group">
+              <label for="modal-project-status">创作状态</label>
+              <select id="modal-project-status" class="select-control">
+                <option value="drafting">草稿撰写中 (drafting)</option>
+                <option value="finished">已完结 (finished)</option>
+                <option value="paused">暂时搁置 (paused)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="modal-project-premise">核心立意 / 故事大纲与设定</label>
+            <textarea id="modal-project-premise" class="textarea-control" rows="3" placeholder="描述作品的核心冲突、主角背景或灵感来源..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="modal-project-content">当前章节 / 草稿正文 (自动计入字数)</label>
+            <textarea id="modal-project-content" class="textarea-control" rows="6" placeholder="输入手稿或正文草稿..."></textarea>
+          </div>
+
+          <div class="form-group" style="display: flex; flex-direction: row; align-items: center; gap: 8px; margin-top: 4px;">
+            <input type="checkbox" id="modal-project-secret" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--danger);" />
+            <label for="modal-project-secret" style="margin: 0; cursor: pointer; font-weight: 500; font-size: 0.84rem; color: var(--danger);">存入私密抽屉夹层 (需要密码解锁才可见)</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="modal-project-cancel">取消</button>
+          <button class="btn btn-primary btn-sm" id="modal-project-save">💾 保存作品</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模态框 6: 抽屉夹层密码解锁 -->
+    <div class="modal-overlay" id="modal-unlock-drawer">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h3>🔒 解锁抽屉夹层</h3>
+          <button class="modal-close" id="modal-unlock-drawer-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="hint-text" style="margin-bottom: 12px;">请输入私密抽屉夹层访问密码以查看或编辑私密作品。</p>
+          <div class="form-group">
+            <label for="modal-unlock-password">夹层访问密码</label>
+            <input type="password" id="modal-unlock-password" class="input-control" placeholder="输入密码 (默认: 123456)" />
+          </div>
+          <div id="modal-unlock-error" style="color: var(--danger); font-size: 0.85rem; margin-top: 6px; display: none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="modal-unlock-drawer-cancel">取消</button>
+          <button class="btn btn-primary btn-sm" id="modal-unlock-drawer-submit">🔓 解锁</button>
         </div>
       </div>
     </div>
